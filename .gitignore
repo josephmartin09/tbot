@@ -1,0 +1,11 @@
+.DS_Store
+*.log
+*.egg-info
+
+/Pipfile
+/.env
+
+/config
+/build
+/docs/build
+/dist
