@@ -19,12 +19,13 @@ periods = {
 }
 
 
-def yf_get_market_ohlc(symbol, end_dt, period):
+def yf_get_market_ohlc(symbol, period, end_dt, tz_str="local"):
     """Return YFinance's market OHLC for the symbol.
 
     :param str symbol: The symbol to request
-    :param datetime end_dt: The most recent date to receive candles for
     :param timedelta period: The candle period
+    :param datetime end_dt: The most recent date to receive candles for
+    :param str tz_str: String specifying timezone to return data in. Use 'local' for local timezone, or pass a pytz string such as US/Eastern, or UTC
 
     .. note::
         The start of the series is determined by the candle period. The lookback table is defined as follows
@@ -59,13 +60,14 @@ def yf_get_market_ohlc(symbol, end_dt, period):
         end=(end_dt.date()),
     )
 
-    # Strip the timezone, then convert to US/Eastern which is the timezone used by yfinance
-    # This is done because for some reason yfinance returns inconsistent timezone
-    # information.
+    # Strip the timezone, then convert to US/Eastern: YFinance doesn't put a timezone on
+    # daily or larger candles
     data = data.tz_localize(None)
-    data = data.tz_localize(pytz.timezone("US/Eastern"))
-    # Use TZ Convert to get the data back in the user's local timezone
-    data = data.tz_convert(datetime.astimezone(datetime.now()).tzinfo)
+    data = data.tz_localize("US/Eastern")
+    if tz_str == "local":
+        data = data.tz_convert(datetime.astimezone(datetime.now()).tzinfo)
+    else:
+        data = data.tz_convert(pytz.timezone(tz_str))
 
     # Convert to the candles data structure
     candles = []
