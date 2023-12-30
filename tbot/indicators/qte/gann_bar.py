@@ -1,16 +1,9 @@
-from enum import IntEnum, auto
+from tbot.indicators.candle_indicator import CandleIndicator
 
-from .candle_indicator import CandleIndicator
-
-
-class GannDirection(IntEnum):
-    """Enumerated type to represent Gann bar directions."""
-
-    UP = 1
-    DOWN = auto()
+from .gann_dir import GannDir
 
 
-class GannCounter(CandleIndicator):
+class GannBar(CandleIndicator):
     """Class to perform trend detection using a Gann Bar Counting."""
 
     def __init__(self):
@@ -26,9 +19,9 @@ class GannCounter(CandleIndicator):
 
         # Label the first direction based on close direction
         if series[0].open < series[0].close:
-            trend.append(GannDirection.UP)
+            trend.append(GannDir.UP)
         else:
-            trend.append(GannDirection.DOWN)
+            trend.append(GannDir.DOWN)
 
         # Determine Gann Bar Directions
         for i in range(1, len(series)):
@@ -37,11 +30,11 @@ class GannCounter(CandleIndicator):
 
             # Up bar
             if (curr.high > prev.high) and (curr.low > prev.low):
-                trend.append(GannDirection.UP)
+                trend.append(GannDir.UP)
 
             # Down bar
             elif (curr.low < prev.low) and (curr.high < prev.high):
-                trend.append(GannDirection.DOWN)
+                trend.append(GannDir.DOWN)
 
             # Inside bar
             elif (curr.high < prev.high) and (curr.low > prev.low):

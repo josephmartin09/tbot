@@ -2,9 +2,8 @@ import math
 
 import numpy as np
 
-from .candle_indicator import CandleIndicator
-from .gann_waves import GannWaves
-from .gann_with_hoagie import GannDirection
+from tbot.indicators.candle_indicator import CandleIndicator
+from tbot.indicators.qte import GannABC, GannDir
 
 
 class HorizontalSR(CandleIndicator):
@@ -16,13 +15,13 @@ class HorizontalSR(CandleIndicator):
     def __init__(self):
         """Initialize the indicator."""
         super().__init__()
-        self._gann_waves = GannWaves()
+        self._gann_abc = GannABC()
 
     def update(self, series):
         """Update the indicator."""
         # Step 1: Classify all inflection points using gann waves
-        self._gann_waves.update(series)
-        gann_waves = self._gann_waves.data
+        self._gann_abc.update(series)
+        gann_waves = self._gann_abc.data
         inflections = []
         trend_dir = gann_waves[0]
         curr_dir = trend_dir
@@ -30,12 +29,12 @@ class HorizontalSR(CandleIndicator):
             curr_dir = gann_waves[i]
 
             # Local Minimum
-            if curr_dir == GannDirection.UP and trend_dir == GannDirection.DOWN:
+            if curr_dir == GannDir.UP and trend_dir == GannDir.DOWN:
                 inflections.append(series[i - 1].low)
                 trend_dir = curr_dir
 
             # Local Maximum
-            elif curr_dir == GannDirection.DOWN and trend_dir == GannDirection.UP:
+            elif curr_dir == GannDir.DOWN and trend_dir == GannDir.UP:
                 inflections.append(series[i - 1].high)
                 trend_dir = curr_dir
 

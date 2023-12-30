@@ -1,11 +1,11 @@
 class Candle:
     """Class to represent an OHLC candle."""
 
-    def __init__(self, time, period, c_open, c_high, c_low, c_close, c_volume):
+    def __init__(self, period, time, c_open, c_high, c_low, c_close, c_volume):
         """Initialize the candle.
 
-        :param datetime.datetime time: Time of candle open
         :param datetime.timedelta period: The time-period of the candle
+        :param datetime.datetime time: Time of candle open
         :param float c_open: Open price of the candle
         :param float c_high: High price of the candle
         :param float c_low: Low price of the candle

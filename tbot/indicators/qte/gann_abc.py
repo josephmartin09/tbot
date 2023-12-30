@@ -1,8 +1,10 @@
-from .candle_indicator import CandleIndicator
-from .gann_with_hoagie import GannDirection, GannWithHoagie
+from tbot.indicators.candle_indicator import CandleIndicator
+
+from .gann_dir import GannDir
+from .gann_with_hoagie import GannWithHoagie
 
 
-class GannWaves(CandleIndicator):
+class GannABC(CandleIndicator):
     """Class to calculate wave structure of the market."""
 
     def __init__(self):
@@ -44,19 +46,19 @@ class GannWaves(CandleIndicator):
             assigned_dir = None
 
             # We moved from UP to DOWN
-            if curr_dir == GannDirection.DOWN:
+            if curr_dir == GannDir.DOWN:
                 # Check for lower low to indicate new trend
                 if series[inflections[i][2]].low < series[inflections[i - 1][1]].low:
-                    assigned_dir = GannDirection.DOWN
+                    assigned_dir = GannDir.DOWN
                     trend_inflection = inflections[i]
                 else:
                     assigned_dir = trend_dir
 
             # We moved from DOWN to UP
-            elif curr_dir == GannDirection.UP:
+            elif curr_dir == GannDir.UP:
                 # Check for higher high to indicate new trend
                 if series[inflections[i][2]].high > series[inflections[i - 1][1]].high:
-                    assigned_dir = GannDirection.UP
+                    assigned_dir = GannDir.UP
                     trend_inflection = inflections[i]
                 else:
                     assigned_dir = trend_dir

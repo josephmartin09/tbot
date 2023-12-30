@@ -2,16 +2,13 @@ from datetime import datetime, timedelta
 
 import pytz
 import yfinance as yf
-from flask import Flask, jsonify, request
 
 from tbot.candles import Candle, CandleSeries
-from tbot.indicators import HorizontalSR
+from tbot.indicators.sr import HorizontalSR
 from tbot.util import log
 
 log.disable_sublogger("yfinance")
 log.disable_sublogger("peewee")
-
-app = Flask(__name__)
 
 periods = {
     timedelta(minutes=1): "1m",
@@ -67,11 +64,13 @@ def yf_get_market_ohlc(symbol, end_dt, period):
         end=(end_dt.date()),
     )
 
-    # Strip the timezone, then convert back to UTC.
+    # Strip the timezone, then convert to US/Eastern which is the timezone used by yfinance
     # This is done because for some reason yfinance returns inconsistent timezone
     # information.
     data = data.tz_localize(None)
     data = data.tz_localize(pytz.timezone("US/Eastern"))
+    # Use TZ Convert to get the data back in the user's local timezone
+    data = data.tz_convert(datetime.astimezone(datetime.now()).tzinfo)
 
     # Convert to the candles data structure
     candles = []
@@ -91,54 +90,18 @@ def yf_get_market_ohlc(symbol, end_dt, period):
 
 
 def run():
-    """Start the Flask API web server."""
-    app.run(host="localhost", port=8081, debug=True)
-
-
-@app.route("/")
-def root():
-    """Root API route."""
-    return jsonify({"msg": "Hello API"})
-
-
-@app.route("/trade", methods=["POST"])
-def trade():
-    """Trade API route."""
-    params = request.json
+    """Run the example."""
+    params = {"symbol": "/BTC=F", "timeframe": "1d"}
 
     # Download daily candles to use for support/resistance
     sr_pd = timedelta(days=1)
-    candles_sr = yf_get_market_ohlc(params["symbol"], datetime.now(), sr_pd)
+    candles = yf_get_market_ohlc(params["symbol"], datetime.now(), sr_pd)
 
     # Download candles for requested timeframe
-    candles_req = yf_get_market_ohlc(
+    candles = yf_get_market_ohlc(
         params["symbol"], datetime.now(), times[params["timeframe"]]
     )
-    candles_req_chart = []
-    for c in candles_req:
-        candles_req_chart.append(
-            {
-                # Note that lightweight charts needs the utc offset to correctly display time
-                "time": c.time.timestamp() + c.time.utcoffset().total_seconds(),
-                "open": c.open,
-                "high": c.high,
-                "low": c.low,
-                "close": c.close,
-            }
-        )
 
-    # Calculate Support/Resistance, keeping lines only visible in the requested timeframe
-    candles_sr.register_indicator("s_r", HorizontalSR())
-    s_r = []
-    filter_min = min([c.low for c in candles_req])
-    filter_max = max([c.high for c in candles_req])
-    filter_min -= 0.01 * filter_min
-    filter_max += 0.01 * filter_max
-    for sr_line in candles_sr.indicators["s_r"].last:
-        if sr_line >= filter_min and sr_line <= filter_max:
-            s_r.append(sr_line)
-
-    # Construct response
-    resp = {"candles": candles_req_chart, "s_r": s_r}
-
-    return jsonify(resp)
+    # Run an Indicator
+    candles.register_indicator("horiztonal_sr", HorizontalSR())
+    print(candles.indicators["horiztonal_sr"].last)

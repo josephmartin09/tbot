@@ -1,13 +1,6 @@
-from enum import IntEnum, auto
+from tbot.indicators.candle_indicator import CandleIndicator
 
-from .candle_indicator import CandleIndicator
-
-
-class GannDirection(IntEnum):
-    """Enumerated type to represent Gann bar directions."""
-
-    UP = 1
-    DOWN = auto()
+from .gann_dir import GannDir
 
 
 class GannWithHoagie(CandleIndicator):
@@ -32,9 +25,9 @@ class GannWithHoagie(CandleIndicator):
 
         # Label the first direction based on close direction
         if series[0].open < series[0].close:
-            trend.append(GannDirection.UP)
+            trend.append(GannDir.UP)
         else:
-            trend.append(GannDirection.DOWN)
+            trend.append(GannDir.DOWN)
 
         # Determine Gann Bar Directions
         for i in range(1, len(series)):
@@ -44,7 +37,7 @@ class GannWithHoagie(CandleIndicator):
             if hoagie_active:
                 # Up bar
                 if (curr.high > hoagie_candle.high) and (curr.low > hoagie_candle.low):
-                    trend.append(GannDirection.UP)
+                    trend.append(GannDir.UP)
                     hoagie_active = False
                     hoagie_candle = None
 
@@ -52,7 +45,7 @@ class GannWithHoagie(CandleIndicator):
                 elif (curr.low < hoagie_candle.low) and (
                     curr.high < hoagie_candle.high
                 ):
-                    trend.append(GannDirection.DOWN)
+                    trend.append(GannDir.DOWN)
                     hoagie_active = False
                     hoagie_candle = None
 
@@ -71,11 +64,11 @@ class GannWithHoagie(CandleIndicator):
             else:
                 # Up bar
                 if (curr.high > prev.high) and (curr.low > prev.low):
-                    trend.append(GannDirection.UP)
+                    trend.append(GannDir.UP)
 
                 # Down bar
                 elif (curr.low < prev.low) and (curr.high < prev.high):
-                    trend.append(GannDirection.DOWN)
+                    trend.append(GannDir.DOWN)
 
                 # Inside bar
                 elif (curr.high < prev.high) and (curr.low > prev.low):
