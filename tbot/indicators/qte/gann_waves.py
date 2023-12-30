@@ -4,8 +4,8 @@ from .gann_dir import GannDir
 from .gann_with_hoagie import GannWithHoagie
 
 
-class GannABC(CandleIndicator):
-    """Class to calculate abc structure of the market."""
+class GannWaves(CandleIndicator):
+    """Class to calculate wave structure of the market."""
 
     def __init__(self):
         """Initialize the indicator."""
@@ -33,10 +33,10 @@ class GannABC(CandleIndicator):
         curr_inflection.append(len(gann_bars) - 1)
         inflections.append(curr_inflection)
 
-        # Calculate the first abc using data from the first inflection period
-        gann_abcs = [-1] * len(series)
+        # Calculate the first wave using data from the first inflection period
+        gann_waves = [-1] * len(series)
         for i in range(0, inflections[0][2] + 1):
-            gann_abcs[i] = inflections[0][0]
+            gann_waves[i] = inflections[0][0]
         trend_inflection = inflections[0]
 
         # Use previous inflections to calculate the larger trend
@@ -65,6 +65,6 @@ class GannABC(CandleIndicator):
 
             # Fill in the candles
             for i in range(inflections[i][1], inflections[i][2] + 1):
-                gann_abcs[i] = assigned_dir
+                gann_waves[i] = assigned_dir
 
-        self._result = gann_abcs
+        self._result = gann_waves

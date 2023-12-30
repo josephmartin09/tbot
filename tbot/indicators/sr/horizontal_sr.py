@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 from tbot.indicators.candle_indicator import CandleIndicator
-from tbot.indicators.qte import GannABC, GannDir
+from tbot.indicators.qte import GannDir, GannWaves
 
 
 class HorizontalSR(CandleIndicator):
@@ -15,13 +15,13 @@ class HorizontalSR(CandleIndicator):
     def __init__(self):
         """Initialize the indicator."""
         super().__init__()
-        self._gann_abc = GannABC()
+        self._gann_wave = GannWaves()
 
     def update(self, series):
         """Update the indicator."""
-        # Step 1: Classify all inflection points using gann waves
-        self._gann_abc.update(series)
-        gann_waves = self._gann_abc.data
+        # Step 1: Classify all inflection points using gann wave
+        self._gann_wave.update(series)
+        gann_waves = self._gann_wave.data
         inflections = []
         trend_dir = gann_waves[0]
         curr_dir = trend_dir
@@ -33,7 +33,7 @@ class HorizontalSR(CandleIndicator):
                 inflections.append(series[i - 1].low)
                 trend_dir = curr_dir
 
-            # Local Maximum
+            # Locl Maximum
             elif curr_dir == GannDir.DOWN and trend_dir == GannDir.UP:
                 inflections.append(series[i - 1].high)
                 trend_dir = curr_dir
