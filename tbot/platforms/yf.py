@@ -19,13 +19,13 @@ periods = {
 }
 
 
-def yf_get_market_ohlc(symbol, period, end_dt, tz_str="local"):
+def yf_get_market_ohlc(symbol, period, end_dt, tz_str=None):
     """Return YFinance's market OHLC for the symbol.
 
     :param str symbol: The symbol to request
     :param timedelta period: The candle period
     :param datetime end_dt: The most recent date to receive candles for
-    :param str tz_str: String specifying timezone to return data in. Use 'local' for local timezone, or pass a pytz string such as US/Eastern, or UTC
+    :param str tz_str: pytz string specifying timezone to return the data in.  If None, the computer's local timezone will be used
 
     .. note::
         The start of the series is determined by the candle period. The lookback table is defined as follows
@@ -60,14 +60,24 @@ def yf_get_market_ohlc(symbol, period, end_dt, tz_str="local"):
         end=(end_dt.date()),
     )
 
-    # Strip the timezone, then convert to US/Eastern: YFinance doesn't put a timezone on
-    # daily or larger candles
+    # YFinance doesn't seem to use timezone on daily or larger candles.
+    # The workaround is to remove any timezone it returns, then use US/Eastern, which is what yahoo
+    # finance website is reporting its intraday data with. Then, the code below will convert from US/Eastern
+    # to the requested timezone
     data = data.tz_localize(None)
-    data = data.tz_localize("US/Eastern")
-    if tz_str == "local":
-        data = data.tz_convert(datetime.astimezone(datetime.now()).tzinfo)
+    if period < timedelta(days=1):
+        data = data.tz_localize("US/Eastern")
+        if tz_str is None:
+            data = data.tz_convert(datetime.astimezone(datetime.now()).tzinfo)
+        else:
+            data = data.tz_convert(pytz.timezone(tz_str))
+
+    # For daily or longer, we don't want to convert, just apply the requested timezone
     else:
-        data = data.tz_convert(pytz.timezone(tz_str))
+        if tz_str is None:
+            data = data.tz_localize(datetime.astimezone(datetime.now()).tzinfo)
+        else:
+            data = data.tz_localize(pytz.timezone(tz_str))
 
     # Convert to the candles data structure
     candles = []
