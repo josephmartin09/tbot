@@ -10,39 +10,33 @@ class HorizontalSR(CandleIndicator):
     """Indicator of horizontal support and resistance lines."""
 
     NUM_HISTOGRAM_BINS = 100
-    MIN_TOUCHES = 1
+    MIN_TOUCHES = 2
 
     def __init__(self):
         """Initialize the indicator."""
         super().__init__()
-        self._gann_wave = GannWaves()
+        self._gann_waves = GannWaves()
 
     def update(self, series):
         """Update the indicator."""
         # Step 1: Classify all inflection points using gann wave
-        self._gann_wave.update(series)
-        gann_waves = self._gann_wave.data
-        inflections = []
-        trend_dir = gann_waves[0]
-        curr_dir = trend_dir
+        # Note: We are going to want to use trend changes instead of gann wave changes,
+        # but this is the right idea
+        sr_potentials = []
+        self._gann_waves.update(series)
+        gann_waves = self._gann_waves.last
         for i in range(1, len(gann_waves)):
-            curr_dir = gann_waves[i]
-
-            # Local Minimum
-            if curr_dir == GannDir.UP and trend_dir == GannDir.DOWN:
-                inflections.append(series[i - 1].low)
-                trend_dir = curr_dir
-
-            # Locl Maximum
-            elif curr_dir == GannDir.DOWN and trend_dir == GannDir.UP:
-                inflections.append(series[i - 1].high)
-                trend_dir = curr_dir
+            wave = gann_waves[i]
+            if wave.dir == GannDir.UP:
+                sr_potentials.append(wave.low)
+            else:
+                sr_potentials.append(wave.high)
 
         # Step 2: Create a histogram of the inflections
         range_min = math.floor(min([c.low for c in series]))
         range_max = math.ceil(max([c.high for c in series]))
         touch_cnt, bins = np.histogram(
-            inflections,
+            sr_potentials,
             bins=self.NUM_HISTOGRAM_BINS,
             range=(range_min, range_max),
         )

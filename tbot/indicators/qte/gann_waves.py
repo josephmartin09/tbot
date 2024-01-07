@@ -8,6 +8,7 @@ from .gann_with_hoagie import GannWithHoagie
 Inflection = namedtuple("Inflection", ["dir", "start_ind", "end_ind", "low", "high"])
 
 
+# TODO: Technically, by itself this isn't an indicator.  It's the building block
 class GannWaves(CandleIndicator):
     """Class to calculate abc structure of the market."""
 

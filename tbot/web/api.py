@@ -5,7 +5,7 @@ import yfinance as yf
 from flask import Flask, jsonify, request
 
 from tbot.candles import Candle, CandleSeries
-from tbot.indicators import HorizontalSR
+from tbot.indicators.sr import HorizontalSR
 from tbot.util import log
 
 log.disable_sublogger("yfinance")
