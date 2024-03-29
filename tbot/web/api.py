@@ -5,7 +5,7 @@ import yfinance as yf
 from flask import Flask, jsonify, request
 
 from tbot.candles import Candle, CandleSeries
-from tbot.indicators import HorizontalSR
+from tbot.indicators.sr import HorizontalSR
 from tbot.util import log
 
 log.disable_sublogger("yfinance")
@@ -78,8 +78,8 @@ def yf_get_market_ohlc(symbol, end_dt, period):
     for index, row in data.iterrows():
         candles.append(
             Candle(
-                index.to_pydatetime(),
                 period,
+                index.to_pydatetime(),
                 row["Open"],
                 row["High"],
                 row["Low"],

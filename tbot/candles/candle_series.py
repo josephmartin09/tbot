@@ -55,6 +55,10 @@ class CandleSeries:
                     f"Not all candles in the series have a period of {str(self._candle_period)}"
                 )
 
+    def _update_indicators(self):
+        for ind in self._indicators.values():
+            ind._update(self)
+
     def append(self, candle):
         """Append a candle to the series."""
         # Check that we got a Candle
@@ -74,10 +78,6 @@ class CandleSeries:
     def last(self):
         """Return the most recent candle in the series."""
         return self._series[-1]
-
-    def _update_indicators(self):
-        for ind in self._indicators.values():
-            ind.update(self)
 
     @property
     def indicators(self):
@@ -104,12 +104,14 @@ class CandleSeries:
             )
 
         self._indicators[name] = indicator
-        indicator.update(self)
+        indicator._update(self)
 
     def unregister_indicator(self, name):
         """Unregister an indicator from the feed.
 
         :param str name: The registered name of the indicator
         """
-        if name in self._indicators:
+        try:
             del self._indicators[name]
+        except KeyError:
+            pass
