@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 from tbot.indicators.candle_indicator import CandleIndicator
-from tbot.indicators.qte import GannDir, GannWaves
+from tbot.indicators.qte import GannDir, GannLegs
 
 
 class HorizontalSR(CandleIndicator):
@@ -15,7 +15,7 @@ class HorizontalSR(CandleIndicator):
     def __init__(self):
         """Initialize the indicator."""
         super().__init__()
-        self._gann_waves = GannWaves()
+        self._gann_legs = GannLegs()
 
     def update(self, series):
         """Update the indicator."""
@@ -23,10 +23,10 @@ class HorizontalSR(CandleIndicator):
         # Note: We are going to want to use trend changes instead of gann wave changes,
         # but this is the right idea
         sr_potentials = []
-        self._gann_waves.update(series)
-        gann_waves = self._gann_waves.last
-        for i in range(1, len(gann_waves)):
-            wave = gann_waves[i]
+        self._gann_legs.update(series)
+        gann_legs = self._gann_legs.last
+        for i in range(1, len(gann_legs)):
+            wave = gann_legs[i]
             if wave.dir == GannDir.UP:
                 sr_potentials.append(wave.low)
             else:

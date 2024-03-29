@@ -9,8 +9,8 @@ Inflection = namedtuple("Inflection", ["dir", "start_ind", "end_ind", "low", "hi
 
 
 # TODO: Technically, by itself this isn't an indicator.  It's the building block
-class GannWaves(CandleIndicator):
-    """Class to calculate abc structure of the market."""
+class GannLegs(CandleIndicator):
+    """Class to calculate the start and end points of gann legs up and down."""
 
     def __init__(self):
         """Initialize the indicator."""
@@ -69,5 +69,4 @@ class GannWaves(CandleIndicator):
                     Inflection(inf[0], inf[1], inf[2], prev_inf.low, max(inf_highs))
                 )
 
-        print(series[0].time)
         self._result.append(inflections)
