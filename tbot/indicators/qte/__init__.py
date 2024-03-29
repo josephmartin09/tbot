@@ -1,7 +1,3 @@
-"""Indicators used by the Quant Trade Edge YouTube channel."""
+from .gann import GannAnalysis
 
-from .gann_abc import GannABC
-from .gann_bar import GannBar
-from .gann_with_hoagie import GannWithHoagie
-
-__all__ = ["GannABC", "GannBar", "GannWithHoagie"]
+__all__ = ["GannAnalysis"]

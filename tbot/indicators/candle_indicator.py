@@ -11,6 +11,9 @@ class CandleIndicator(Indicator):
         super().__init__()
         self._result = []
 
+    def _update(self, series):
+        self._result.append(self.update(series))
+
     @abstractmethod
     def update(self, series):
         """Calculate the result of the indicator on the series, then save the result.
