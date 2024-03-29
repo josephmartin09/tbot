@@ -9,8 +9,8 @@ from datetime import datetime
 
 project = "tbot"
 year = datetime.now().year
-copyright = f"{year}, TMTG"
-author = "Joseph Martin, Michael Stearn"
+copyright = f"{year}"
+author = "Joseph Martin"
 
 
 # -- General configuration ---------------------------------------------------
