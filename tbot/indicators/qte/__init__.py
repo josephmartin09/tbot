@@ -1,3 +1,3 @@
-from .gann import GannAnalysis
+from .gann import GannAnalysis, GannDir
 
-__all__ = ["GannAnalysis"]
+__all__ = ["GannAnalysis", "GannDir"]
