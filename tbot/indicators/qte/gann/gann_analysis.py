@@ -251,7 +251,7 @@ class GannAnalysis(CandleIndicator):
                             uturn_level = None
                             curr_trend = GannDir.DOWN
                 else:
-                    # Current leg is UP, check for trend continuation
+                    # Current leg is DOWN, check for trend continuation
                     if curr_leg["dir"] == GannDir.DOWN:
                         if curr_leg["low"] <= crit_low:
                             # Lower Low
