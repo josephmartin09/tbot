@@ -88,6 +88,11 @@ class GannAnalysis(CandleIndicator):
 
     @classmethod
     def _calc_legs(cls, series, bar_dirs):
+        """Calculate the leg directions using bar directions as input.
+
+        :returns: A list of leg directions
+        """
+
         def new_leg():
             return {
                 "dir": None,
@@ -160,13 +165,116 @@ class GannAnalysis(CandleIndicator):
                     if (A["high"] > B["high"]) and (B["low"] > C["low"]):
                         abc_down_inds.append(C["end"])
 
-        # Flatten ABC location into an array the same size as the data series
+        # Flatten ABC locations into an array the same size as the data series
         abcs = [None] * len(series)
         for ind in abc_up_inds:
             abcs[ind] = GannDir.UP
         for ind in abc_down_inds:
             abcs[ind] = GannDir.DOWN
         return abcs
+
+    @classmethod
+    def _calc_uturns(cls, series, legs):
+        uturn_up_inds = []
+        uturn_down_inds = []
+
+        crit_high = None
+        crit_low = None
+        curr_trend = None
+        if legs[0]["dir"] == GannDir.UP:
+            curr_trend = GannDir.UP
+        else:
+            curr_trend = GannDir.DOWN
+        crit_high = legs[0]["high"]
+        crit_low = legs[0]["low"]
+        uturn_level = None
+
+        # Search for uturns with the rest of the legs.
+        for i in range(1, len(legs)):
+            curr_leg = legs[i]
+            if uturn_level is None:
+                # In an UP trend, look for a lower-low to set the uturn level
+                if curr_trend == GannDir.UP:
+                    # Current leg is UP, check for trend continuation
+                    if curr_leg["dir"] == GannDir.UP:
+                        if curr_leg["high"] >= crit_high:
+                            # Higher High
+                            crit_high = curr_leg["high"]
+                        else:
+                            # Lower High
+                            pass
+
+                    # Current leg is DOWN, check for initial UTURN level
+                    else:
+                        if curr_leg["low"] >= crit_low:
+                            # Higher Low
+                            crit_low = curr_leg["low"]
+                        else:
+                            # Lower Low
+                            uturn_level = curr_leg["low"]
+
+                # In a DOWN trend, look for a higher high to set the uturn level
+                else:
+                    # Current leg is DOWN, check for trend continuation
+                    if curr_leg["dir"] == GannDir.DOWN:
+                        if curr_leg["low"] <= crit_low:
+                            # Lower Low
+                            crit_low = curr_leg["low"]
+                        else:
+                            # Higher Low
+                            pass
+
+                    # Current leg is UP, check for initial UTURN level
+                    else:
+                        if curr_leg["high"] <= crit_high:
+                            crit_high = curr_leg["high"]
+                        else:
+                            uturn_level = curr_leg["high"]
+
+            # We have a pending UTURN
+            else:
+                if curr_trend == GannDir.UP:
+                    # Current leg is UP, check for trend continuation
+                    if curr_leg["dir"] == GannDir.UP:
+                        if curr_leg["high"] >= crit_high:
+                            # Higher High
+                            crit_high = curr_leg["high"]
+                            uturn_level = None
+
+                    # Current leg is DOWN, check for confirmed UTURN
+                    else:
+                        if curr_leg["low"] < uturn_level:
+                            # UTURN DOWN
+                            uturn_down_inds.append(curr_leg["end"])
+                            crit_low = curr_leg["low"]
+                            crit_high = curr_leg["high"]
+                            uturn_level = None
+                            curr_trend = GannDir.DOWN
+                else:
+                    # Current leg is DOWN, check for trend continuation
+                    if curr_leg["dir"] == GannDir.DOWN:
+                        if curr_leg["low"] <= crit_low:
+                            # Lower Low
+                            crit_low = curr_leg["low"]
+                            uturn_level = None
+
+                    # Current leg is UP, check for confirmed UTURN
+                    else:
+                        if curr_leg["high"] > uturn_level:
+                            # UTURN UP
+                            uturn_up_inds.append(curr_leg["end"])
+                            crit_low = curr_leg["low"]
+                            crit_high = curr_leg["high"]
+                            uturn_level = None
+                            curr_trend = GannDir.UP
+
+        # Flatten uturn locations into an array the same size as the data series
+        uturns = [None] * len(series)
+        for ind in uturn_up_inds:
+            uturns[ind] = GannDir.UP
+        for ind in uturn_down_inds:
+            uturns[ind] = GannDir.DOWN
+        return uturns
 
     def update(self, series):
         """Calculate the result of the indicator on the series, then save the result.
@@ -176,4 +284,5 @@ class GannAnalysis(CandleIndicator):
         bar_dirs = self._calc_dirs(series)
         legs = self._calc_legs(series, bar_dirs)
         abcs = self._calc_abcs(series, legs)
-        return {"bars": bar_dirs, "abcs": abcs}
+        uturns = self._calc_uturns(series, legs)
+        return {"bars": bar_dirs, "abcs": abcs, "uturns": uturns}

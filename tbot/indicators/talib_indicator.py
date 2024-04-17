@@ -44,8 +44,8 @@ class TalibIndicator(CandleIndicator):
         # return more than one value. In this cases, a list is returned.  We have to
         # transpose that list to make the last data point reflect the same time value
         if isinstance(result, list):
-            self._result = np.transpose(result)
+            return np.transpose(result)
 
         # The result is likely in the correct format already
         else:
-            self._result = result
+            return result
