@@ -113,14 +113,37 @@ class IBApi(EWrapper, EClient):
     def tickPrice(
         self, reqId: TickerId, tickType: TickerId, price: float, attrib: TickAttrib
     ):
-        """Receive price ticks from the market data feed."""
-        self._queues["mktData"].put(
-            {"tickType": tickType, "price": price, "attrib": attrib}
-        )
+        """Receive price ticks from the market data feed.
+
+        .. note::
+            Please see https://ibkrcampus.com/ibkr-api-page/twsapi-doc/#available-tick-types
+        """
+        if tickType == 1:
+            self._queues["mktData"].put(
+                {"tickType": tickType, "price": price, "attrib": attrib, "dir": "BID"}
+            )
+        elif tickType == 2:
+            self._queues["mktData"].put(
+                {"tickType": tickType, "price": price, "attrib": attrib, "dir": "ASK"}
+            )
 
     def tickSize(self, reqId: TickerId, tickType: TickerId, size: Decimal):
         """Receive size ticks from the market data feed."""
-        self._queues["mktData"].put({"tickType": tickType, "size": size})
+        if tickType == 86:
+            self._queues["mktData"].put({"tickType": tickType, "size": size})
+
+    def tickGeneric(self, reqId: TickerId, tickType: TickerId, value: float):
+        """Receive generic ticks from the market data feed."""
+        self._queues["mktData"].put({"tickType": tickType, "value": value})
+
+    def tickString(self, reqId: TickerId, tickType: TickerId, value: str):
+        """Receive string ticks from the market data feed.
+
+        .. note::
+            tick type 48 gives the Time And Sales 'tick' data
+        """
+        if tickType == 48 or tickType == 77:
+            self._queues["mktData"].put({"tickType": tickType, "value": value})
 
 
 ###
@@ -139,10 +162,10 @@ api_thread.start()
 time.sleep(1)
 
 contract = Contract()
-contract.symbol = "CL"
+contract.symbol = "ES"
 contract.secType = "CONTFUT"
 contract.currency = "USD"
-contract.exchange = "NYMEX"
+contract.exchange = "CME"
 
 try:
     print("Loading contract")
@@ -150,11 +173,11 @@ try:
     fullContract = contactDetails.contract
     print(fullContract)
 
-    # print("Requesting Tick data")
+    # print("Requesting Top of Book Quotes")
     # tickQueue = app.reqTickByTickData(fullContract, "BidAsk", 0, False)
 
     print("Requesting Market data")
-    tickQueue = app.reqMktData(fullContract, "", False, False, [])
+    tickQueue = app.reqMktData(fullContract, "375", False, False, [])
 
     while True:
         try:
