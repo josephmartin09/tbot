@@ -1,9 +1,13 @@
+import queue
 import threading
 import time
-from datetime import datetime
+
+# from datetime import datetime
+from decimal import Decimal
 from queue import Queue
 
 from ibapi.client import EClient
+from ibapi.common import TagValueList, TickAttrib, TickAttribBidAsk, TickerId
 from ibapi.contract import Contract
 from ibapi.wrapper import EWrapper
 
@@ -12,35 +16,118 @@ CLIENT_ID = 78258
 
 
 class IBApi(EWrapper, EClient):
-    """Example IB Wrapper."""
+    """Class to implement IBApi Wrapper."""
 
     def __init__(self):
         """Initialize the parent IB Classes."""
         EClient.__init__(self, self)
-        self._q = Queue()
 
-    def error(self, reqId, errorCode, errorString, advancedOrderRejectJson):
+        self._queues = {}
+        self._reqId = 0
+
+    @property
+    def reqId(self):
+        """Return the next available request ID."""
+        self._reqId += 1
+        return self._reqId
+
+    def error(self, reqId, errorCode, errorString, *args):
         """Receive errors from api callback."""
         print(errorCode, errorString)
 
-    def historicalData(self, reqId, bar):
-        """Receive historical data form callback."""
-        self._q.put(bar)
+    def reqContractDetails(self, contract: Contract):
+        """Request full contract details for a contract."""
+        self._queues["contractDetails"] = Queue()
+        super().reqContractDetails(self.reqId, contract)
+        return self._queues["contractDetails"]
 
     def contractDetails(self, reqId, contractDetails):
         """Receive contract details from callback."""
-        self._q.put(contractDetails)
+        self._queues["contractDetails"].put(contractDetails)
+
+    # reqHistoricalData
+
+    # def historicalData(self, reqId, bar):
+    #     """Receive historical data form callback."""
+    #     self._queues["historicalData"].put(bar)
+
+    def reqTickByTickData(
+        self,
+        contract: Contract,
+        tickType: str,
+        numberOfTicks: TickerId,
+        ignoreSize: bool,
+    ):
+        """Request bid/ask quotes."""
+        self._queues["tickData"] = Queue()
+        super().reqTickByTickData(
+            self.reqId, contract, tickType, numberOfTicks, ignoreSize
+        )
+        return self._queues["tickData"]
 
     def tickByTickBidAsk(
-        self, reqId, time, bidPrice, askPrice, bidSize, askSize, tickAttribBidAsk
+        self,
+        reqId: TickerId,
+        time: TickerId,
+        bidPrice: float,
+        askPrice: float,
+        bidSize: Decimal,
+        askSize: Decimal,
+        tickAttribBidAsk: TickAttribBidAsk,
     ):
-        """Receive bid/ask ticks from callback.
+        """Receive bid/ask quotes from callback.
 
         .. note::
-            It appears these are aggregated, but I don't know how.
+            This is what I originally called "quote".  It's the most recent bid/ask after a transaction took
+            place.
         """
-        print(datetime.fromtimestamp(time), bidPrice, bidSize, askPrice, askSize)
+        self._queues["tickData"].put(
+            {
+                "time": time,
+                "bidPrice": bidPrice,
+                "askPrice": askPrice,
+                "bidSize": bidSize,
+                "askSize": askSize,
+                "tickAttribBidAsk": tickAttribBidAsk,
+            }
+        )
 
+    def reqMktData(
+        self,
+        contract: Contract,
+        genericTickList: str,
+        snapshot: bool,
+        regulatorySnapshot: bool,
+        mktDataOptions: TagValueList,
+    ):
+        """Request tick data for a contract."""
+        print(
+            "WARNING: Ignoring snapshot and regulatorySnapshot parameters to avoid paying for snapshots."
+        )
+        self._queues["mktData"] = Queue()
+        super().reqMktData(
+            self.reqId, contract, genericTickList, False, False, mktDataOptions
+        )
+        return self._queues["mktData"]
+
+    def tickPrice(
+        self, reqId: TickerId, tickType: TickerId, price: float, attrib: TickAttrib
+    ):
+        """Receive price ticks from the market data feed."""
+        self._queues["mktData"].put(
+            {"tickType": tickType, "price": price, "attrib": attrib}
+        )
+
+    def tickSize(self, reqId: TickerId, tickType: TickerId, size: Decimal):
+        """Receive size ticks from the market data feed."""
+        self._queues["mktData"].put({"tickType": tickType, "size": size})
+
+
+###
+# This works
+# app.reqHistoricalData(1, contract, '', '1 D', '1 min', 'TRADES', 0, 2,
+#     False, [])
+##
 
 app = IBApi()
 app.connect("127.0.0.1", API_PORT, CLIENT_ID)
@@ -48,33 +135,38 @@ app.connect("127.0.0.1", API_PORT, CLIENT_ID)
 api_thread = threading.Thread(target=app.run)
 api_thread.start()
 
+# Need to fix this. This is not production-level
 time.sleep(1)
 
 contract = Contract()
-# contract.symbol = 'CL'
-# contract.secType = 'CONTFUT'
-# contract.exchange = 'NYMEX'
-# contract.currency = 'USD'
-
-contract.symbol = "NQ"
+contract.symbol = "CL"
 contract.secType = "CONTFUT"
-contract.exchange = "CME"
 contract.currency = "USD"
-
-# This works
-# app.reqHistoricalData(1, contract, '', '1 D', '1 min', 'TRADES', 0, 2,
-#     False, [])
-
-app.reqContractDetails(1, contract)
-otherContract = app._q.get().contract
-app.reqTickByTickData(3, otherContract, "BidAsk", 0, False)
+contract.exchange = "NYMEX"
 
 try:
+    print("Loading contract")
+    contactDetails = app.reqContractDetails(contract).get(timeout=1.0)
+    fullContract = contactDetails.contract
+    print(fullContract)
+
+    # print("Requesting Tick data")
+    # tickQueue = app.reqTickByTickData(fullContract, "BidAsk", 0, False)
+
+    print("Requesting Market data")
+    tickQueue = app.reqMktData(fullContract, "", False, False, [])
+
     while True:
-        bar = app._q.get()
-        print(f"Time: {datetime.fromtimestamp(int(bar.date))} Close: {bar.close}")
+        try:
+            print(tickQueue.get(timeout=0.25))
+        except queue.Empty:
+            pass
 
 except KeyboardInterrupt:
     pass
 
-app.disconnect()
+except Exception as e:
+    print(str(e))
+
+finally:
+    app.disconnect()
