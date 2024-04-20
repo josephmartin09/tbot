@@ -137,11 +137,8 @@ class IBApi(EWrapper, EClient):
         self._queues["mktData"].put({"tickType": tickType, "value": value})
 
     def tickString(self, reqId: TickerId, tickType: TickerId, value: str):
-        """Receive string ticks from the market data feed.
-
-        .. note::
-            tick type 48 gives the Time And Sales 'tick' data
-        """
+        """Receive string ticks from the market data feed."""
+        # These are most recent T&S tick
         if tickType == 48 or tickType == 77:
             self._queues["mktData"].put({"tickType": tickType, "value": value})
 
