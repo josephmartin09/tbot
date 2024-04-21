@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 
 from tbot.indicators.qte import GannAnalysis, GannDir
-from tbot.platforms.yf import yf_get_market_ohlc
+
+# from tbot.platforms.yf import get_market_ohlc
+from tbot.platforms.ibkr import get_market_ohlc
 
 UP = GannDir.UP
 DOWN = GannDir.DOWN
@@ -12,10 +14,10 @@ ENABLE_UTURNS = True
 
 def run():
     """Run the example."""
-    params = {"symbol": "/NQ=F", "timeframe": timedelta(minutes=5)}
+    params = {"symbol": "/ES=F", "timeframe": timedelta(minutes=5)}
 
     # Download candles from YFinance
-    candles = yf_get_market_ohlc(params["symbol"], params["timeframe"], datetime.now())
+    candles = get_market_ohlc(params["symbol"], params["timeframe"], datetime.now())
 
     # Run an Indicator
     candles.register_indicator("gann", GannAnalysis())

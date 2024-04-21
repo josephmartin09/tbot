@@ -1,15 +1,17 @@
 import queue
 import threading
 import time
-
-# from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from queue import Queue
+from threading import Event
 
 from ibapi.client import EClient
-from ibapi.common import TagValueList, TickAttrib, TickAttribBidAsk, TickerId
+from ibapi.common import BarData, TagValueList, TickAttrib, TickAttribBidAsk, TickerId
 from ibapi.contract import Contract
 from ibapi.wrapper import EWrapper
+
+from tbot.candles import Candle, CandleSeries
 
 API_PORT = 4002
 CLIENT_ID = 78258
@@ -24,6 +26,7 @@ class IBApi(EWrapper, EClient):
 
         self._queues = {}
         self._reqId = 0
+        self._connect_evt = Event()
 
     @property
     def reqId(self):
@@ -35,6 +38,14 @@ class IBApi(EWrapper, EClient):
         """Receive errors from api callback."""
         print(errorCode, errorString)
 
+    def nextValidId(self, id):
+        """Receive connection validation.
+
+        .. note::
+            For now, it's being used to indicate connection success
+        """
+        print("CONNECTION SUCCESS")
+
     def reqContractDetails(self, contract: Contract):
         """Request full contract details for a contract."""
         self._queues["contractDetails"] = Queue()
@@ -45,11 +56,38 @@ class IBApi(EWrapper, EClient):
         """Receive contract details from callback."""
         self._queues["contractDetails"].put(contractDetails)
 
-    # reqHistoricalData
+    def reqHistoricalData(
+        self,
+        contract: Contract,
+        endDateTime: str,
+        durationStr: str,
+        barSizeSetting: str,
+        whatToShow: str,
+        useRTH: TickerId,
+        formatDate: TickerId,
+        keepUpToDate: bool,
+        chartOptions: TagValueList,
+    ):
+        """Request historical bar data for a contract."""
+        self._queues["historicalData"] = Queue()
+        super().reqHistoricalData(
+            self.reqId,
+            contract,
+            endDateTime,
+            durationStr,
+            barSizeSetting,
+            whatToShow,
+            useRTH,
+            formatDate,
+            keepUpToDate,
+            chartOptions,
+        )
+        return self._queues["historicalData"]
 
-    # def historicalData(self, reqId, bar):
-    #     """Receive historical data form callback."""
-    #     self._queues["historicalData"].put(bar)
+    def historicalData(self, reqId: TickerId, bar: BarData):
+        """Receive historical data form callback."""
+        super().historicalData(reqId, bar)
+        self._queues["historicalData"].put(bar)
 
     def reqTickByTickData(
         self,
@@ -143,50 +181,129 @@ class IBApi(EWrapper, EClient):
             self._queues["mktData"].put({"tickType": tickType, "value": value})
 
 
-###
-# This works
-# app.reqHistoricalData(1, contract, '', '1 D', '1 min', 'TRADES', 0, 2,
-#     False, [])
-##
+# Application code start
+periods = {
+    timedelta(minutes=1): "1 mins",
+    timedelta(minutes=2): "2 mins",
+    timedelta(minutes=3): "3 mins",
+    timedelta(minutes=5): "5 mins",
+    timedelta(minutes=10): "10 mins",
+    timedelta(minutes=15): "15 mins",
+    timedelta(hours=1): "1 hour",
+    timedelta(days=1): "1 day",
+    timedelta(weeks=1): "1 week",
+}
 
-app = IBApi()
-app.connect("127.0.0.1", API_PORT, CLIENT_ID)
+lookback = {
+    timedelta(minutes=1): "1 D",
+    timedelta(minutes=2): "2 D",
+    timedelta(minutes=3): "3 D",
+    timedelta(minutes=5): "5 D",
+    timedelta(minutes=10): "10 D",
+    timedelta(minutes=15): "2 W",
+    timedelta(hours=1): "3 W",
+    timedelta(days=1): "2 M",
+    timedelta(weeks=1): "6 M",
+}
 
-api_thread = threading.Thread(target=app.run)
-api_thread.start()
 
-# Need to fix this. This is not production-level
-time.sleep(1)
+def get_market_ohlc(symbol, period, end_dt, tz_str=None):
+    """Return YFinance's market OHLC for the symbol.
 
-contract = Contract()
-contract.symbol = "ES"
-contract.secType = "CONTFUT"
-contract.currency = "USD"
-contract.exchange = "CME"
+    :param str symbol: The symbol to request
+    :param timedelta period: The candle period
+    :param datetime end_dt: The most recent date to receive candles for
+    :param str tz_str: pytz string specifying timezone to return the data in.  If None, the computer's local timezone will be used
 
-try:
-    print("Loading contract")
-    contactDetails = app.reqContractDetails(contract).get(timeout=1.0)
-    fullContract = contactDetails.contract
-    print(fullContract)
+    .. note::
+        The start of the series is determined by the candle period. The lookback table is defined as follows
 
-    # print("Requesting Top of Book Quotes")
-    # tickQueue = app.reqTickByTickData(fullContract, "BidAsk", 0, False)
+    .. code-block::
 
-    print("Requesting Market data")
-    tickQueue = app.reqMktData(fullContract, "375", False, False, [])
+        lookback = {
+            timedelta(minutes=1): "1 D",
+            timedelta(minutes=2): "2 D",
+            timedelta(minutes=3): "3 D",
+            timedelta(minutes=5): "5 D",
+            timedelta(minutes=10): "10 D",
+            timedelta(minutes=15): "2 W",
+            timedelta(hours=1): "3 W",
+            timedelta(days=1): "2 M",
+            timedelta(weeks=1): "6 M",
+        }
 
-    while True:
-        try:
-            print(tickQueue.get(timeout=0.25))
-        except queue.Empty:
-            pass
+    """
+    app = IBApi()
+    app.connect("127.0.0.1", API_PORT, CLIENT_ID)
 
-except KeyboardInterrupt:
-    pass
+    api_thread = threading.Thread(target=app.run)
+    api_thread.start()
 
-except Exception as e:
-    print(str(e))
+    # How to get rid of this sleep?
+    time.sleep(1)
 
-finally:
-    app.disconnect()
+    bars = list()
+    try:
+        print("ignore symbol and just use ES")
+        contract = Contract()
+        contract.symbol = "ES"
+        contract.secType = "CONTFUT"
+        contract.currency = "USD"
+        contract.exchange = "CME"
+
+        print("Loading contract")
+        fullContract = app.reqContractDetails(contract).get(timeout=1.0).contract
+        print(fullContract)
+
+        print("Loading Historical Data")
+        # Am I supposed to give a endDate to know when to stop parsing?  That seems to be the "right" way
+        respQueue = app.reqHistoricalData(
+            contract, "", lookback[period], periods[period], "TRADES", 0, 2, False, []
+        )
+        while True:
+            try:
+                bars.append(respQueue.get(timeout=0.25))
+            except queue.Empty:
+                if len(bars) > 0:
+                    break
+
+    except KeyboardInterrupt:
+        pass
+
+    except Exception as e:
+        print(str(e))
+
+    finally:
+        app.disconnect()
+
+        if len(bars) == 0:
+            return []
+
+        candles = []
+        for b in bars:
+            candles.append(
+                Candle(
+                    period,
+                    datetime.fromtimestamp(int(b.date)).astimezone(tz_str),
+                    float(b.open),
+                    float(b.high),
+                    float(b.low),
+                    float(b.close),
+                    float(b.volume),
+                )
+            )
+        return CandleSeries(period, candles, len(candles))
+
+
+# # Stuff I need eventually
+# print("Requesting Top of Book Quotes")
+# tickQueue = app.reqTickByTickData(fullContract, "BidAsk", 0, False)
+
+# print("Requesting Market data")
+# tickQueue = app.reqMktData(fullContract, "375", False, False, [])
+
+# while True:
+#     try:
+#         print(tickQueue.get(timeout=0.25))
+#     except queue.Empty:
+#         pass

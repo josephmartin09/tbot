@@ -18,8 +18,17 @@ periods = {
     timedelta(weeks=1): "1wk",
 }
 
+lookback = {
+    timedelta(minutes=1): timedelta(days=1),
+    timedelta(minutes=5): timedelta(days=5),
+    timedelta(minutes=15): timedelta(days=5),
+    timedelta(hours=1): timedelta(days=20),
+    timedelta(days=1): timedelta(days=365),
+    timedelta(weeks=1): timedelta(days=3 * 365),
+}
 
-def yf_get_market_ohlc(symbol, period, end_dt, tz_str=None):
+
+def get_market_ohlc(symbol, period, end_dt, tz_str=None):
     """Return YFinance's market OHLC for the symbol.
 
     :param str symbol: The symbol to request
@@ -42,15 +51,6 @@ def yf_get_market_ohlc(symbol, period, end_dt, tz_str=None):
         }
 
     """
-    lookback = {
-        timedelta(minutes=1): timedelta(days=1),
-        timedelta(minutes=5): timedelta(days=5),
-        timedelta(minutes=15): timedelta(days=5),
-        timedelta(hours=1): timedelta(days=20),
-        timedelta(days=1): timedelta(days=365),
-        timedelta(weeks=1): timedelta(days=3 * 365),
-    }
-
     # Download hourly candles from yfinance
     end_dt += timedelta(days=1)
     data = yf.download(
