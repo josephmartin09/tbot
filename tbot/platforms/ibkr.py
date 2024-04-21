@@ -243,15 +243,15 @@ def get_market_ohlc(symbol, period, end_dt, tz_str=None):
 
     bars = list()
     try:
-        print("ignore symbol and just use ES")
         contract = Contract()
         contract.symbol = symbol
         contract.secType = "CONTFUT"
         contract.currency = "USD"
-        # contract.exchange = "CME"
+        contract.exchange = "COMEX"
 
         print("Loading contract")
         fullContract = app.reqContractDetails(contract).get(timeout=1.0).contract
+        print(fullContract)
 
         print("Loading Historical Data")
         # Am I supposed to give a endDate to know when to stop parsing?  That seems to be the "right" way
