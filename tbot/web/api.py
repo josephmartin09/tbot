@@ -27,7 +27,7 @@ for k, v in periods.items():
     times[v] = k
 
 
-def yf_get_market_ohlc(symbol, end_dt, period):
+def get_market_ohlc(symbol, end_dt, period):
     """Return YFinance's market OHLC for the symbol.
 
     :param str symbol: The symbol to request
@@ -108,10 +108,10 @@ def trade():
 
     # Download daily candles to use for support/resistance
     sr_pd = timedelta(days=1)
-    candles_sr = yf_get_market_ohlc(params["symbol"], datetime.now(), sr_pd)
+    candles_sr = get_market_ohlc(params["symbol"], datetime.now(), sr_pd)
 
     # Download candles for requested timeframe
-    candles_req = yf_get_market_ohlc(
+    candles_req = get_market_ohlc(
         params["symbol"], datetime.now(), times[params["timeframe"]]
     )
     candles_req_chart = []
