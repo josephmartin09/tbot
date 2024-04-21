@@ -183,7 +183,7 @@ class IBApi(EWrapper, EClient):
 
 # Application code start
 periods = {
-    timedelta(minutes=1): "1 mins",
+    timedelta(minutes=1): "1 min",
     timedelta(minutes=2): "2 mins",
     timedelta(minutes=3): "3 mins",
     timedelta(minutes=5): "5 mins",
@@ -231,7 +231,6 @@ def get_market_ohlc(symbol, period, end_dt, tz_str=None):
             timedelta(days=1): "2 M",
             timedelta(weeks=1): "6 M",
         }
-
     """
     app = IBApi()
     app.connect("127.0.0.1", API_PORT, CLIENT_ID)
@@ -246,19 +245,26 @@ def get_market_ohlc(symbol, period, end_dt, tz_str=None):
     try:
         print("ignore symbol and just use ES")
         contract = Contract()
-        contract.symbol = "ES"
+        contract.symbol = symbol
         contract.secType = "CONTFUT"
         contract.currency = "USD"
-        contract.exchange = "CME"
+        # contract.exchange = "CME"
 
         print("Loading contract")
         fullContract = app.reqContractDetails(contract).get(timeout=1.0).contract
-        print(fullContract)
 
         print("Loading Historical Data")
         # Am I supposed to give a endDate to know when to stop parsing?  That seems to be the "right" way
         respQueue = app.reqHistoricalData(
-            contract, "", lookback[period], periods[period], "TRADES", 0, 2, False, []
+            fullContract,
+            "",
+            lookback[period],
+            periods[period],
+            "TRADES",
+            0,
+            2,
+            False,
+            [],
         )
         while True:
             try:
@@ -281,10 +287,15 @@ def get_market_ohlc(symbol, period, end_dt, tz_str=None):
 
         candles = []
         for b in bars:
+            bartime = None
+            if period >= timedelta(days=1):
+                bartime = datetime.strptime(b.date, "%Y%m%d").astimezone(tz_str)
+            else:
+                bartime = datetime.fromtimestamp(int(b.date)).astimezone(tz_str)
             candles.append(
                 Candle(
                     period,
-                    datetime.fromtimestamp(int(b.date)).astimezone(tz_str),
+                    bartime,
                     float(b.open),
                     float(b.high),
                     float(b.low),
