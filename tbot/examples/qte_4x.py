@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from tbot.indicators.qte import GannAnalysis, GannDir
-from tbot.platforms.ibkr import get_market_ohlc
+from tbot.platforms.ibkr_working import get_market_ohlc
 
 UP = GannDir.UP
 DOWN = GannDir.DOWN
@@ -9,7 +9,7 @@ DOWN = GannDir.DOWN
 
 def run():
     """Run the example."""
-    params = {"symbol": "GC", "timeframe": timedelta(minutes=5)}
+    params = {"symbol": "HG", "timeframe": timedelta(minutes=5)}
 
     # Download daily candles
     daily_candles = get_market_ohlc(params["symbol"], timedelta(days=1), datetime.now())

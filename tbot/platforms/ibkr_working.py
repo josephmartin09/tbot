@@ -16,6 +16,32 @@ from tbot.candles import Candle, CandleSeries
 API_PORT = 4002
 CLIENT_ID = 78258
 
+periods = {
+    timedelta(minutes=1): "1 min",
+    timedelta(minutes=2): "2 mins",
+    timedelta(minutes=3): "3 mins",
+    timedelta(minutes=5): "5 mins",
+    timedelta(minutes=10): "10 mins",
+    timedelta(minutes=15): "15 mins",
+    timedelta(hours=1): "1 hour",
+    timedelta(days=1): "1 day",
+    timedelta(weeks=1): "1 week",
+}
+
+lookback = {
+    timedelta(minutes=1): "1 D",
+    timedelta(minutes=2): "2 D",
+    timedelta(minutes=3): "3 D",
+    timedelta(minutes=5): "5 D",
+    timedelta(minutes=10): "10 D",
+    timedelta(minutes=15): "2 W",
+    timedelta(hours=1): "3 W",
+    timedelta(days=1): "2 M",
+    timedelta(weeks=1): "6 M",
+}
+
+cached_contracts = {""}
+
 
 class IBApi(EWrapper, EClient):
     """Class to implement IBApi Wrapper."""
@@ -38,13 +64,14 @@ class IBApi(EWrapper, EClient):
         """Receive errors from api callback."""
         print(errorCode, errorString)
 
-    def nextValidId(self, id):
+    def nextValidId(self, nextValidId):
         """Receive connection validation.
 
         .. note::
             For now, it's being used to indicate connection success
         """
         print("CONNECTION SUCCESS")
+        self._reqId = nextValidId
 
     def reqContractDetails(self, contract: Contract):
         """Request full contract details for a contract."""
@@ -179,32 +206,6 @@ class IBApi(EWrapper, EClient):
         # These are most recent T&S tick
         if tickType == 48 or tickType == 77:
             self._queues["mktData"].put({"tickType": tickType, "value": value})
-
-
-# Application code start
-periods = {
-    timedelta(minutes=1): "1 min",
-    timedelta(minutes=2): "2 mins",
-    timedelta(minutes=3): "3 mins",
-    timedelta(minutes=5): "5 mins",
-    timedelta(minutes=10): "10 mins",
-    timedelta(minutes=15): "15 mins",
-    timedelta(hours=1): "1 hour",
-    timedelta(days=1): "1 day",
-    timedelta(weeks=1): "1 week",
-}
-
-lookback = {
-    timedelta(minutes=1): "1 D",
-    timedelta(minutes=2): "2 D",
-    timedelta(minutes=3): "3 D",
-    timedelta(minutes=5): "5 D",
-    timedelta(minutes=10): "10 D",
-    timedelta(minutes=15): "2 W",
-    timedelta(hours=1): "3 W",
-    timedelta(days=1): "2 M",
-    timedelta(weeks=1): "6 M",
-}
 
 
 def get_market_ohlc(symbol, period, end_dt, tz_str=None):
