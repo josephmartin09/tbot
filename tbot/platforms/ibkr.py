@@ -13,6 +13,10 @@ from ibapi.contract import Contract
 from ibapi.wrapper import EWrapper
 
 from tbot.candles import Candle
+from tbot.util import log
+
+log.disable_sublogger("ibapi")
+LOGGER = log.get_logger()
 
 API_PORT = 4002
 CLIENT_ID = 78258
@@ -53,8 +57,7 @@ exchange_lookup = {
     "ES": "CME",
     "NQ": "CME",
     "RTY": "CME",
-    "YM": "CME",
-    "VX": "CME",
+    "YM": "CBOT",
     # Commodities
     "ZC": "CBOT",
     "ZS": "CBOT",
@@ -66,6 +69,7 @@ class IBApi(EWrapper, EClient):
 
     def __init__(self):
         """Initialize the parent IB Classes."""
+        LOGGER.debug("Initializing IBKR EWrapper and EClient")
         EWrapper.__init__(self)
         EClient.__init__(self, wrapper=self)
 
@@ -73,9 +77,6 @@ class IBApi(EWrapper, EClient):
         self._reqId = 0
         self._conn_evt = Event()
         self._thr = None
-
-    def _add_queue(self, reqId):
-        self._queues[reqId] = Queue()
 
     def nextReqId(self):
         """Return the next available request ID."""
@@ -91,16 +92,23 @@ class IBApi(EWrapper, EClient):
         advancedOrderRejectJson="",
     ):
         """Receive errors from api callback."""
-        super().error(reqId, errorCode, errorString, advancedOrderRejectJson)
+        # Some error codes are not errors.
+        if errorCode in [2104, 2107, 2158]:
+            return
+        LOGGER.error(f"ERR_NO: {errorCode} MSG: {errorString}")
 
     def connect(self, host, port, clientId):
         """Connect to the IBKR API."""
+        LOGGER.debug("Initiating connection to IB Gateway")
         super().connect(host, port, clientId)
 
         self._conn_evt.clear()
         self._thr = Thread(target=self.run)
         self._thr.start()
+
+        LOGGER.debug("Waiting for connection acknowledgement")
         self._conn_evt.wait()
+        LOGGER.debug("Connected to IB Gateway")
 
     def disconnect(self):
         """Disconnect from the IBKR API."""
@@ -110,7 +118,8 @@ class IBApi(EWrapper, EClient):
                 super().disconnect()
                 self._thr.join()
             else:
-                # Remote disconnect
+                # Disconnect called from IBKR thread. Doing nothing here prevents
+                # race conditions that I'm not willing to debug
                 pass
 
     def nextValidId(self, nextValidId):
@@ -124,16 +133,15 @@ class IBApi(EWrapper, EClient):
             self._conn_evt.set()
 
     # Contract and Contract Search
-    def reqContractDetails(self, contract: Contract):
+    def reqContractDetails(self, queue: Queue, contract: Contract):
         """Request full contract details for a contract."""
         reqId = self.nextReqId()
-        self._add_queue(reqId)
-        super().reqContractDetails(reqId, contract)
-        return self._queues[reqId]
+        self._queues[reqId] = queue
+        return super().reqContractDetails(reqId, contract)
 
     def contractDetails(self, reqId, contractDetails):
         """Receive contract details from callback."""
-        self._queues[reqId].put(contractDetails)
+        self._queues[reqId].put_nowait(contractDetails)
 
     def reqContractFromSymbol(self, symbol, exchange=None):
         """Retrieve a Contract from a symbol.
@@ -155,7 +163,7 @@ class IBApi(EWrapper, EClient):
         else:
             contContract.exchange = exchange_lookup.get(symbol, "")
             if contContract.exchange == "":
-                print("WARNING: Exchange field unknown. ibapi will try to guess")
+                LOGGER.warning("Exchange field unknown. ibapi will try to guess")
         contractDetails = app.reqContractDetails(contContract).get()
 
         # Docs seem to imply real time bars need FUT instead of CONTFUT.
@@ -166,19 +174,19 @@ class IBApi(EWrapper, EClient):
     # Real-time Bars
     def reqRealTimeBars(
         self,
+        queue: Queue,
         contract: Contract,
         barSize: TickerId,
         whatToShow: str,
         useRTH: bool,
         realTimeBarsOptions: TagValueList,
     ):
-        """Request Real-Time bars for a contract."""
+        """Request real-time bars for a contract."""
         reqId = self.nextReqId()
-        self._add_queue(reqId)
-        super().reqRealTimeBars(
+        self._queues[reqId] = queue
+        return super().reqRealTimeBars(
             reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
         )
-        return self._queues[reqId]
 
     def realtimeBar(
         self,
@@ -193,7 +201,7 @@ class IBApi(EWrapper, EClient):
         count: TickerId,
     ):
         """Receive a real-time bar."""
-        self._queues[reqId].put(
+        self._queues[reqId].put_nowait(
             {
                 "time": time,
                 "open": open,
@@ -209,6 +217,7 @@ class IBApi(EWrapper, EClient):
     # Historical Bars
     def reqHistoricalData(
         self,
+        queue: Queue,
         contract: Contract,
         endDateTime: str,
         durationStr: str,
@@ -221,8 +230,8 @@ class IBApi(EWrapper, EClient):
     ):
         """Request historical bar data for a contract."""
         reqId = self.nextReqId()
-        self._add_queue(reqId)
-        super().reqHistoricalData(
+        self._queues[reqId] = queue
+        return super().reqHistoricalData(
             reqId,
             contract,
             endDateTime,
@@ -234,15 +243,14 @@ class IBApi(EWrapper, EClient):
             keepUpToDate,
             chartOptions,
         )
-        return self._queues[reqId]
 
     def historicalData(self, reqId: TickerId, bar: BarData):
         """Receive initial historical data from callback."""
-        self._queues[reqId].put(bar)
+        self._queues[reqId].put_nowait(bar)
 
     def historicalDataUpdate(self, reqId: TickerId, bar: BarData):
         """Receive real-time bar updates from callback."""
-        self._queues[reqId].put(bar)
+        self._queues[reqId].put_nowait(bar)
 
 
 if __name__ == "__main__":
@@ -251,7 +259,7 @@ if __name__ == "__main__":
         app.connect("127.0.0.1", API_PORT, CLIENT_ID)
 
         # Load a contract
-        contract = app.reqContractFromSymbol("NG")
+        contract = app.reqContractFromSymbol("NQ")
         print(contract)
 
         # Receive real-time bars
