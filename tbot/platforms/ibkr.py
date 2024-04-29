@@ -93,7 +93,7 @@ class IBApi(EWrapper, EClient):
     ):
         """Receive errors from api callback."""
         # Some error codes are not errors.
-        if errorCode in [2104, 2107, 2158]:
+        if errorCode in [2104, 2106, 2107, 2158]:
             return
         LOGGER.error(f"ERR_NO: {errorCode} MSG: {errorString}")
 

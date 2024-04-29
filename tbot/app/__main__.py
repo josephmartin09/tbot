@@ -1,4 +1,5 @@
 import queue
+import threading
 import traceback
 
 from tbot.platforms.ibkr import Contract, IBApi
@@ -34,6 +35,43 @@ EXCHANGE_LOOKUP = {
 SYMBOLS = ["ES", "NQ", "RTY", "YM"]
 
 
+class MultiQueue(queue.Queue):
+    """Queue that allows waiting for multiple items efficiently."""
+
+    def __init__(self, maxsize=0, nwait=1):
+        """Initialize the MultiQueue.
+
+        :param int maxsize: The maximum number of items in the queue. 0 specifies infinite length
+        :param int nwait: The number of items required for wait_for_all to return True
+        """
+        super().__init__(maxsize=maxsize)
+        self._nwait = nwait
+
+        self._cv_lock = threading.Lock()
+        self._cond = threading.Condition(self._cv_lock)
+
+    def is_complete(self):
+        """Determine if there are at least nwait items in the queue."""
+        return self.qsize() >= self._nwait
+
+    def put_nowait(self, item):
+        """Put an item in the queue, without blocking."""
+        super().put_nowait(item)
+        with self._cond:
+            if self.is_complete():
+                self._cond.notify()
+
+    def wait_for_all(self, timeout=None):
+        """Wait until at least nwait items are in the queue.
+
+        :param float timeout: The number of seconds to wait. If timeout is None, the wait is indefinite
+        :return: True if there are n items in the queue, False if there was a timeout
+        :rtype: bool
+        """
+        with self._cond:
+            return self._cond.wait_for(self.is_complete, timeout=timeout)
+
+
 class ABCScanner:
     """Application to scan for ABCs at a key level."""
 
@@ -58,7 +96,7 @@ class ABCScanner:
             self.ibkr.connect("127.0.0.1", API_PORT, CLIENT_ID)
 
             # Request IBKR contracts for symbols
-            contract_q = queue.Queue()
+            contract_q = MultiQueue(nwait=len(self._symbols))
             for s in self._symbols:
                 # Create a continuous futures contract
                 c = Contract()
@@ -69,22 +107,13 @@ class ABCScanner:
 
                 self.ibkr.reqContractDetails(contract_q, c)
 
-            # This is serious garbage
-            err = False
-            for i in range(4):
-                try:
-                    c = contract_q.get(timeout=1).contract
-                    c.secType = "FUT"
-                    self._contracts[c.symbol] = c
-                except queue.Empty:
-                    err = True
-
-                if err:
-                    raise RuntimeError(
-                        "Failed to load all requested contract definition"
-                    )
-
-            # Not being able to pend on multiple queues is garbage
+            # Save the returned contracts
+            if not contract_q.wait_for_all(timeout=5):
+                raise RuntimeError("Couldn't load all the contracts")
+            for i in range(len(self._symbols)):
+                c = contract_q.get_nowait().contract
+                c.secType = "FUT"
+                self._contracts[c.symbol] = c
 
         except KeyboardInterrupt:
             LOGGER.info("Shutdown Requested")
