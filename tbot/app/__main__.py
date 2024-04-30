@@ -5,15 +5,11 @@ import traceback
 from tbot.platforms.ibkr import Contract, IBApi
 from tbot.util import log
 
-# from threading import Condition
-
-
 API_PORT = 4002
 CLIENT_ID = 78258
 
 LOGGER = log.get_logger()
 
-# This is duplicated. Remove eventually
 EXCHANGE_LOOKUP = {
     # Metals
     "HG": "COMEX",
@@ -32,7 +28,7 @@ EXCHANGE_LOOKUP = {
     "ZS": "CBOT",
 }
 
-SYMBOLS = ["ES", "NQ", "RTY", "YM"]
+SYMBOLS = ["ES", "NQ", "RTY", "YM", "HG", "GC", "CL"]
 
 
 class MultiQueue(queue.Queue):
@@ -96,6 +92,7 @@ class ABCScanner:
             self.ibkr.connect("127.0.0.1", API_PORT, CLIENT_ID)
 
             # Request IBKR contracts for symbols
+            LOGGER.info("Requesting full contract info for symbols")
             contract_q = MultiQueue(nwait=len(self._symbols))
             for s in self._symbols:
                 # Create a continuous futures contract
@@ -105,6 +102,7 @@ class ABCScanner:
                 c.currency = "USD"
                 c.exchange = EXCHANGE_LOOKUP.get(s, "")
 
+                # Request the full contract details for the contract
                 self.ibkr.reqContractDetails(contract_q, c)
 
             # Save the returned contracts
@@ -114,6 +112,11 @@ class ABCScanner:
                 c = contract_q.get_nowait().contract
                 c.secType = "FUT"
                 self._contracts[c.symbol] = c
+                LOGGER.debug(c)
+            LOGGER.info("Contract info received")
+
+            # Request bar data for symbols
+            LOGGER.info("Requesting bar data for contracts")
 
         except KeyboardInterrupt:
             LOGGER.info("Shutdown Requested")

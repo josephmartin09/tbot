@@ -45,24 +45,6 @@ lookback = {
     timedelta(weeks=1): "6 M",
 }
 
-exchange_lookup = {
-    # Metals
-    "HG": "COMEX",
-    "SI": "COMEX",
-    "GC": "COMEX",
-    # Energy
-    "CL": "NYMEX",
-    "NG": "NYMEX",
-    # Indices
-    "ES": "CME",
-    "NQ": "CME",
-    "RTY": "CME",
-    "YM": "CBOT",
-    # Commodities
-    "ZC": "CBOT",
-    "ZS": "CBOT",
-}
-
 
 class IBApi(EWrapper, EClient):
     """Class to implement IBApi Wrapper."""
@@ -142,34 +124,6 @@ class IBApi(EWrapper, EClient):
     def contractDetails(self, reqId, contractDetails):
         """Receive contract details from callback."""
         self._queues[reqId].put_nowait(contractDetails)
-
-    def reqContractFromSymbol(self, symbol, exchange=None):
-        """Retrieve a Contract from a symbol.
-
-        :param str symbol: The symbol to attempt to retreive a contract for
-        :param str exchange: The exchange the symbol is managed by.  If left as None, a best guess will be attempted
-        """
-        # First, request the continuous futures contract details
-        contContract = Contract()
-        contContract.symbol = symbol
-        contContract.secType = "CONTFUT"
-        contContract.currency = "USD"
-
-        # If the user supplies an exchange, use that
-        if exchange is not None:
-            contContract.exchange = exchange
-
-        # If not, try to look it up from well-known list
-        else:
-            contContract.exchange = exchange_lookup.get(symbol, "")
-            if contContract.exchange == "":
-                LOGGER.warning("Exchange field unknown. ibapi will try to guess")
-        contractDetails = app.reqContractDetails(contContract).get()
-
-        # Docs seem to imply real time bars need FUT instead of CONTFUT.
-        contractDetails.contract.secType = "FUT"
-
-        return contractDetails.contract
 
     # Real-time Bars
     def reqRealTimeBars(
