@@ -1,4 +1,3 @@
-# import queue
 import threading
 
 # import time
@@ -15,7 +14,7 @@ from ibapi.wrapper import EWrapper
 from tbot.candles import Candle
 from tbot.util import log
 
-log.disable_sublogger("ibapi")
+# log.disable_sublogger("ibapi")
 LOGGER = log.get_logger()
 
 API_PORT = 4002
