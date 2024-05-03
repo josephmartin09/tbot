@@ -6,13 +6,15 @@ import time
 class PollableQueue(queue.Queue):
     """Queue object that notifies a QueuePoller when at least one item is placed in the queue."""
 
-    def __init__(self, maxsize=0):
+    def __init__(self, maxsize=0, key=""):
         """Initialize the queue.
 
         :param int maxsize: The maximum size of the queue. 0 indicates queue of infinite length
+        :param str key: A key that can be used to identify the queue.
         """
         super().__init__(maxsize=maxsize)
         self._poll_evt = None
+        self.key = key
 
     def _notify(self):
         if self._poll_evt:

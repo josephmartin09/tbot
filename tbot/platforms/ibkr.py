@@ -1,7 +1,7 @@
 import threading
 
 # import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from queue import Queue
 from threading import Event, Thread
@@ -11,7 +11,6 @@ from ibapi.common import BarData, TagValueList, TickerId
 from ibapi.contract import Contract
 from ibapi.wrapper import EWrapper
 
-from tbot.candles import Candle
 from tbot.util import log
 
 # log.disable_sublogger("ibapi")
@@ -168,18 +167,14 @@ class IBApi(EWrapper, EClient):
         )
 
     # Historical Bars
+    # NOTE: We probably want to allow an end date string. It's been removed here
     def reqHistoricalData(
         self,
         queue: Queue,
         contract: Contract,
-        endDateTime: str,
-        durationStr: str,
-        barSizeSetting: str,
-        whatToShow: str,
+        period: timedelta,
         useRTH: TickerId,
-        formatDate: TickerId,
         keepUpToDate: bool,
-        chartOptions: TagValueList,
     ):
         """Request historical bar data for a contract."""
         reqId = self.nextReqId()
@@ -187,14 +182,14 @@ class IBApi(EWrapper, EClient):
         return super().reqHistoricalData(
             reqId,
             contract,
-            endDateTime,
-            durationStr,
-            barSizeSetting,
-            whatToShow,
+            "",
+            lookback[period],
+            periods[period],
+            "TRADES",
             useRTH,
-            formatDate,
+            2,
             keepUpToDate,
-            chartOptions,
+            [],
         )
 
     def historicalData(self, reqId: TickerId, bar: BarData):
@@ -204,54 +199,3 @@ class IBApi(EWrapper, EClient):
     def historicalDataUpdate(self, reqId: TickerId, bar: BarData):
         """Receive real-time bar updates from callback."""
         self._queues[reqId].put_nowait(bar)
-
-
-if __name__ == "__main__":
-    try:
-        app = IBApi()
-        app.connect("127.0.0.1", API_PORT, CLIENT_ID)
-
-        # Load a contract
-        contract = app.reqContractFromSymbol("NQ")
-        print(contract)
-
-        # Receive real-time bars
-        period = timedelta(days=1)
-        barQueue = app.reqHistoricalData(
-            contract,
-            "",
-            lookback[period],
-            periods[period],
-            "TRADES",
-            0,  # Use ETH (0) or RTH (1)
-            2,  # Receive UNIX timestamp
-            True,  # Stream real-time bars after historical data
-            [],
-        )
-        while True:
-            b = barQueue.get()
-            bartime = None
-            if period >= timedelta(days=1):
-                bartime = datetime.strptime(b.date, "%Y%m%d").astimezone()
-            else:
-                bartime = datetime.fromtimestamp(int(b.date)).astimezone()
-            print(
-                Candle(
-                    period,
-                    bartime,
-                    float(b.open),
-                    float(b.high),
-                    float(b.low),
-                    float(b.close),
-                    float(b.volume),
-                )
-            )
-
-    except KeyboardInterrupt:
-        pass
-
-    except Exception as e:
-        print(e)
-
-    finally:
-        app.disconnect()
