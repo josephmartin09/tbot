@@ -92,8 +92,7 @@ class ABCScanner:
             self.ibkr.reqContractDetails(q, c)
 
         # Wait for contract information to be returned
-        poller = QueuePoller()
-        if not poller.wait_all(contract_queues, timeout=5):
+        if not QueuePoller.wait_all(contract_queues, timeout=5):
             raise RuntimeError(f"Failed to load requested contracts {self._symbols}")
 
         # Update the contracts using the API's contract information
@@ -106,16 +105,19 @@ class ABCScanner:
 
     def request_candles(self):
         """Request candles for the configured symbols."""
-        s = self._symbols[0]
-        q = PollableQueue()
-        self.ibkr.reqHistoricalData(
-            q, self._contracts[s], timedelta(minutes=1), False, True
-        )
-        poller = QueuePoller()
+        queues = []
+        for s in self._symbols:
+            q = PollableQueue(key=f"{s}-1m")
+            queues.append(q)
+            self.ibkr.reqHistoricalData(
+                q, self._contracts[s], timedelta(minutes=1), False, True
+            )
+
         while True:
-            if len(poller.poll([q])) > 0:
+            rlist = QueuePoller.poll(queues)
+            for q in rlist:
                 bar = q.get_nowait()
-                print(to_candle(bar, timedelta(minutes=1)))
+                LOGGER.info(f"{q.key} {to_candle(bar, timedelta(minutes=1))}")
 
     def run(self):
         """Run the application."""

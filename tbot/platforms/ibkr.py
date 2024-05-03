@@ -199,3 +199,11 @@ class IBApi(EWrapper, EClient):
     def historicalDataUpdate(self, reqId: TickerId, bar: BarData):
         """Receive real-time bar updates from callback."""
         self._queues[reqId].put_nowait(bar)
+
+    def historicalDataEnd(self, reqId: TickerId, start: str, end: str):
+        """Receive notice that historical data has finished being sent.
+
+        .. note::
+            If reqHistoricalData was called with keepUpToDate True, this will be called *before* historicalDataUpdate()
+        """
+        return super().historicalDataEnd(reqId, start, end)

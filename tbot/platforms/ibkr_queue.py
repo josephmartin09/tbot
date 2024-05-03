@@ -56,14 +56,16 @@ class PollableQueue(queue.Queue):
 class QueuePoller:
     """Class used to efficiently wait on PollableQueue objects."""
 
-    def _check_queues(self, queues):
+    @classmethod
+    def _check_queues(cls, queues):
         ready_list = []
         for q in queues:
             if q.qsize() > 0:
                 ready_list.append(q)
         return ready_list
 
-    def poll(self, queues, timeout=None):
+    @classmethod
+    def poll(cls, queues, timeout=None):
         """Poll a list of queues for available data.
 
         :param list[queue.Queue] queues: A list of queues to poll
@@ -79,7 +81,7 @@ class QueuePoller:
                 )
 
         # Check if anything is immediatley available
-        initial_ready_list = self._check_queues(queues)
+        initial_ready_list = cls._check_queues(queues)
         if len(initial_ready_list) > 0:
             return initial_ready_list
 
@@ -89,10 +91,11 @@ class QueuePoller:
             q.set_poll_evt(evt)
 
         if evt.wait(timeout=timeout):
-            return self._check_queues(queues)
+            return cls._check_queues(queues)
         return []
 
-    def wait_all(self, queues, timeout=None):
+    @classmethod
+    def wait_all(cls, queues, timeout=None):
         """Wait for all queues to have at least one update.
 
         This can be useful if you need to wait for each queue to get at least one item before returning
@@ -119,7 +122,7 @@ class QueuePoller:
 
             # Poll for updated queues
             poll_start_time = time.time()
-            ready_list = self.poll(poll_list, timeout=time_left)
+            ready_list = cls.poll(poll_list, timeout=time_left)
             poll_elapsed_time = time.time() - poll_start_time
             for q in ready_list:
                 complete_queues[id(q)] = True
