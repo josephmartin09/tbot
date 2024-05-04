@@ -1,7 +1,7 @@
 import threading
 
 # import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from threading import Event, Thread
 
@@ -10,11 +10,12 @@ from ibapi.common import BarData, TagValueList, TickerId
 from ibapi.contract import Contract
 from ibapi.wrapper import EWrapper
 
+from tbot.candles import Candle
 from tbot.util import log
 
 from .queues import CompletionQueue, UpdateQueue
 
-# log.disable_sublogger("ibapi")
+log.disable_sublogger("ibapi")
 LOGGER = log.get_logger()
 
 API_PORT = 4002
@@ -48,6 +49,24 @@ lookback = {
 class IBApi(EWrapper, EClient):
     """Class to implement IBApi Wrapper."""
 
+    @classmethod
+    def to_candle(cls, bar, period):
+        """Convert an IBKR BarData object to a Candle object."""
+        bartime = None
+        if period >= timedelta(days=1):
+            bartime = datetime.strptime(bar.date, "%Y%m%d").astimezone()
+        else:
+            bartime = datetime.fromtimestamp(int(bar.date)).astimezone()
+        return Candle(
+            period,
+            bartime,
+            float(bar.open),
+            float(bar.high),
+            float(bar.low),
+            float(bar.close),
+            float(bar.volume),
+        )
+
     def __init__(self):
         """Initialize the parent IB Classes."""
         LOGGER.debug("Initializing IBKR EWrapper and EClient")
@@ -74,7 +93,7 @@ class IBApi(EWrapper, EClient):
     ):
         """Receive errors from api callback."""
         # Some error codes are not errors.
-        if errorCode in [2104, 2106, 2107, 2158]:
+        if errorCode in [2104, 2106, 2107, 2119, 2158]:
             return
         LOGGER.error(f"ERR_NO: {errorCode} MSG: {errorString}")
 
@@ -175,12 +194,24 @@ class IBApi(EWrapper, EClient):
         update_queue: UpdateQueue,
         contract: Contract,
         period: timedelta,
-        useRTH: TickerId,
+        useRTH: bool,
         keepUpToDate: bool,
     ):
-        """Request historical bar data for a contract."""
+        """Request historical bar data for a contract.
+
+        :param CompletionQueue historical_queue: A queue to receive the historical bars
+        :param UpdateQueue update_queue: A queue to receiver real-time bar updates
+        :param Contract contract: The contract to request data from
+        :param datetime.timedelta period: The bar period
+        :param bool useRTH: If True, use regular trading hours data. If False, use electronic hours data
+        :param bool keepUpToDate: If True, receive real-time bar updates. If False, receive historical bars only
+        """
         reqId = self.nextReqId()
-        self._queues[reqId] = {"historical": historical_queue, "update": update_queue}
+        self._queues[reqId] = {
+            "historical": historical_queue,
+            "update": update_queue,
+            "period": period,
+        }
         return super().reqHistoricalData(
             reqId,
             contract,
@@ -196,7 +227,9 @@ class IBApi(EWrapper, EClient):
 
     def historicalData(self, reqId: TickerId, bar: BarData):
         """Receive initial historical data from callback."""
-        self._queues[reqId]["historical"].put_nowait(bar)
+        self._queues[reqId]["historical"].put_nowait(
+            self.to_candle(bar, self._queues[reqId]["period"])
+        )
 
     def historicalDataUpdate(self, reqId: TickerId, bar: BarData):
         """Receive real-time bar updates from callback."""
