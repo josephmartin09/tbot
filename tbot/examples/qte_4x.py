@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from tbot.indicators.qte import GannAnalysis, GannDir
-from tbot.platforms.ibkr_working import get_market_ohlc
+from tbot.platforms.ibkr.ibkr_working import get_market_ohlc
 
 UP = GannDir.UP
 DOWN = GannDir.DOWN

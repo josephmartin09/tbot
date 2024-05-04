@@ -1,9 +1,10 @@
+import queue
 import traceback
 from datetime import datetime, timedelta
 
-from tbot.candles import Candle
-from tbot.platforms.ibkr import Contract, IBApi
-from tbot.platforms.ibkr_queue import PollableQueue, QueuePoller
+from tbot.candles import Candle, CandleSeries
+from tbot.platforms.ibkr.ibkr import Contract, IBApi
+from tbot.platforms.ibkr.queues import CompletionQueue, QueuePoller, UpdateQueue
 from tbot.util import log
 
 API_PORT = 4002
@@ -87,7 +88,7 @@ class ABCScanner:
             c.exchange = EXCHANGE_LOOKUP.get(s, "")
 
             # Request the full contract details for the contract
-            q = PollableQueue()
+            q = UpdateQueue()
             contract_queues.append(q)
             self.ibkr.reqContractDetails(q, c)
 
@@ -105,19 +106,44 @@ class ABCScanner:
 
     def request_candles(self):
         """Request candles for the configured symbols."""
-        queues = []
+        historicalQueues = []
+        updateQueues = []
         for s in self._symbols:
-            q = PollableQueue(key=f"{s}-1m")
-            queues.append(q)
+            historicalQueue = CompletionQueue(key=f"{s}-1m")
+            updateQueue = UpdateQueue(f"{s}-1m")
+            historicalQueues.append(historicalQueue)
+            updateQueues.append(updateQueue)
             self.ibkr.reqHistoricalData(
-                q, self._contracts[s], timedelta(minutes=1), False, True
+                historicalQueue,
+                updateQueue,
+                self._contracts[s],
+                timedelta(minutes=1),
+                False,
+                True,
             )
 
+        # Wait for initial historical data to be returned
+        LOGGER.info("Waiting for initial historical data")
+        QueuePoller.wait_all(historicalQueues)
+        candles = {}
+        for q in historicalQueues:
+            candle_list = []
+            try:
+                while True:
+                    candle_list.append(to_candle(q.get_nowait(), timedelta(minutes=1)))
+
+            except queue.Empty:
+                candles[q.key] = CandleSeries(
+                    timedelta(minutes=1), candle_list, len(candle_list)
+                )
+
+        # Process updates
+        LOGGER.info("Processing real-time candle updates")
         while True:
-            rlist = QueuePoller.poll(queues)
-            for q in rlist:
-                bar = q.get_nowait()
-                LOGGER.info(f"{q.key} {to_candle(bar, timedelta(minutes=1))}")
+            rlist = QueuePoller.poll(updateQueues)
+            for updateQueue in rlist:
+                for i in range(updateQueue.qsize()):
+                    candles[q.key].append(to_candle(updateQueue.get_nowait()))
 
     def run(self):
         """Run the application."""

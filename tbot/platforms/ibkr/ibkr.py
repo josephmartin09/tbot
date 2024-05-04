@@ -3,7 +3,6 @@ import threading
 # import time
 from datetime import timedelta
 from decimal import Decimal
-from queue import Queue
 from threading import Event, Thread
 
 from ibapi.client import EClient
@@ -12,6 +11,8 @@ from ibapi.contract import Contract
 from ibapi.wrapper import EWrapper
 
 from tbot.util import log
+
+from .queues import CompletionQueue, UpdateQueue
 
 # log.disable_sublogger("ibapi")
 LOGGER = log.get_logger()
@@ -113,7 +114,7 @@ class IBApi(EWrapper, EClient):
             self._conn_evt.set()
 
     # Contract and Contract Search
-    def reqContractDetails(self, queue: Queue, contract: Contract):
+    def reqContractDetails(self, queue: UpdateQueue, contract: Contract):
         """Request full contract details for a contract."""
         reqId = self.nextReqId()
         self._queues[reqId] = queue
@@ -126,7 +127,7 @@ class IBApi(EWrapper, EClient):
     # Real-time Bars
     def reqRealTimeBars(
         self,
-        queue: Queue,
+        queue: UpdateQueue,
         contract: Contract,
         barSize: TickerId,
         whatToShow: str,
@@ -170,7 +171,8 @@ class IBApi(EWrapper, EClient):
     # NOTE: We probably want to allow an end date string. It's been removed here
     def reqHistoricalData(
         self,
-        queue: Queue,
+        historical_queue: CompletionQueue,
+        update_queue: UpdateQueue,
         contract: Contract,
         period: timedelta,
         useRTH: TickerId,
@@ -178,7 +180,7 @@ class IBApi(EWrapper, EClient):
     ):
         """Request historical bar data for a contract."""
         reqId = self.nextReqId()
-        self._queues[reqId] = queue
+        self._queues[reqId] = {"historical": historical_queue, "update": update_queue}
         return super().reqHistoricalData(
             reqId,
             contract,
@@ -194,11 +196,11 @@ class IBApi(EWrapper, EClient):
 
     def historicalData(self, reqId: TickerId, bar: BarData):
         """Receive initial historical data from callback."""
-        self._queues[reqId].put_nowait(bar)
+        self._queues[reqId]["historical"].put_nowait(bar)
 
     def historicalDataUpdate(self, reqId: TickerId, bar: BarData):
         """Receive real-time bar updates from callback."""
-        self._queues[reqId].put_nowait(bar)
+        self._queues[reqId]["update"].put_nowait(bar)
 
     def historicalDataEnd(self, reqId: TickerId, start: str, end: str):
         """Receive notice that historical data has finished being sent.
@@ -206,4 +208,4 @@ class IBApi(EWrapper, EClient):
         .. note::
             If reqHistoricalData was called with keepUpToDate True, this will be called *before* historicalDataUpdate()
         """
-        return super().historicalDataEnd(reqId, start, end)
+        self._queues[reqId]["historical"].complete()
