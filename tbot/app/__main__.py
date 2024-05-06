@@ -10,6 +10,7 @@ API_PORT = 4002
 CLIENT_ID = 78258
 
 LOGGER = log.get_logger()
+LOGGER.setLevel("DEBUG")
 
 EXCHANGE_LOOKUP = {
     # Metals
@@ -29,18 +30,17 @@ EXCHANGE_LOOKUP = {
     "ZS": "CBOT",
 }
 
-# SYMBOLS = ["ES", "NQ", "RTY", "YM", "HG", "GC", "CL"]
-SYMBOLS = list(EXCHANGE_LOOKUP.keys())
-SYMBOLS = ["ES"]
+# SYMBOLS = list(EXCHANGE_LOOKUP.keys())
+SYMBOLS = ["CL", "GC"]
 
-CANDLE_PERIODS = [
-    timedelta(minutes=1),
-    timedelta(minutes=2),
-    timedelta(minutes=3),
-    timedelta(minutes=5),
-    timedelta(minutes=10),
-    timedelta(minutes=15),
-]
+CANDLE_PERIODS = {
+    "1m": timedelta(minutes=1),
+    "2m": timedelta(minutes=2),
+    "3m": timedelta(minutes=3),
+    "5m": timedelta(minutes=5),
+    "10m": timedelta(minutes=10),
+    "15m": timedelta(minutes=15),
+}
 
 
 class ABCScanner:
@@ -53,6 +53,8 @@ class ABCScanner:
         """
         self._symbols = symbols
         self._contracts = {}
+        self._candles = {}
+        self._bar_queues = []
         for s in self._symbols:
             self._contracts[s] = None
 
@@ -94,23 +96,28 @@ class ABCScanner:
         historical_queues = []
         update_queues = []
         for s in self._symbols:
-            historical_queue = CompletionQueue(key=f"{s}-1m")
-            update_queue = UpdateQueue(f"{s}-1m")
-            historical_queues.append(historical_queue)
-            update_queues.append(update_queue)
-            self.ibkr.reqHistoricalData(
-                historical_queue,
-                update_queue,
-                self._contracts[s],
-                timedelta(minutes=1),
-                False,
-                True,
-            )
+            for period_str, period in CANDLE_PERIODS.items():
+                queue_key = f"{s}-{period_str}"
+                LOGGER.debug(f"Requesting {queue_key}")
+                historical_queue = CompletionQueue(key=queue_key)
+                update_queue = UpdateQueue(key=queue_key)
+                historical_queues.append(historical_queue)
+                update_queues.append(update_queue)
+                self.ibkr.reqHistoricalData(
+                    historical_queue,
+                    update_queue,
+                    self._contracts[s],
+                    period,
+                    False,
+                    True,
+                )
 
         # Wait for initial historical data to be returned
-        LOGGER.info("Waiting for historical lower timeframe data")
-        QueuePoller.wait_all(historical_queues)
-        candles = {}
+        LOGGER.info(
+            "Waiting for historical lower timeframe data (this could take a very long time)"
+        )
+        if not QueuePoller.wait_all(historical_queues, timeout=300):
+            raise RuntimeError("Failed to load historical data for all Candles")
         for q in historical_queues:
             candle_list = []
             # Convert each IBKR bar to a candle
@@ -118,12 +125,20 @@ class ABCScanner:
                 candle_list.append(q.get_nowait())
 
             # Convert the candles to a CandleSeries
-            candles[q.key] = CandleSeries(
-                timedelta(minutes=1), candle_list, len(candle_list)
+            self._candles[q.key] = CandleSeries(
+                candle_list[0].period, candle_list, len(candle_list)
             )
-            for c in candles[q.key]:
-                print(c)
         LOGGER.info("Received historical lower timeframe data")
+
+        # Save the real-time queues for further updates
+        self._bar_queues = update_queues
+
+    def process_updates(self):
+        """Process real-time bars and execute accordingly."""
+        while True:
+            rlist = QueuePoller.poll(self._bar_queues)
+            for q in rlist:
+                LOGGER.info(f"{q.key} {q.get_nowait()}")
 
     def run(self):
         """Run the application."""
@@ -139,6 +154,10 @@ class ABCScanner:
             # Request bar data for each contract
             LOGGER.info("Requesting bar data for contracts")
             self.request_candles()
+
+            # Processing real-time updates
+            LOGGER.info("Processing real-time bar updates")
+            self.process_updates()
 
         except KeyboardInterrupt:
             LOGGER.info("Shutdown Requested")
