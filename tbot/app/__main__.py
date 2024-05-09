@@ -6,7 +6,8 @@ from tbot.platforms.ibkr.ibkr import Contract, IBApi
 from tbot.platforms.ibkr.queues import CompletionQueue, QueuePoller, UpdateQueue
 from tbot.util import log
 
-API_PORT = 4002
+IBKR_API_IP = "127.0.0.1"
+IBKR_API_PORT = 4002
 CLIENT_ID = 78258
 
 LOGGER = log.get_logger()
@@ -31,7 +32,7 @@ EXCHANGE_LOOKUP = {
 }
 
 # SYMBOLS = list(EXCHANGE_LOOKUP.keys())
-SYMBOLS = ["CL", "GC"]
+SYMBOLS = ["ES"]
 
 CANDLE_PERIODS = {
     "1m": timedelta(minutes=1),
@@ -52,13 +53,14 @@ class ABCScanner:
         :param list[str] symbols: The names of the continuous futures contracts to scan
         """
         self._symbols = symbols
+
         self._contracts = {}
-        self._candles = {}
-        self._bar_queues = []
         for s in self._symbols:
             self._contracts[s] = None
 
         self.ibkr = IBApi()
+        self._candles = {}
+        self._bar_queues = []
 
     def load_contract_info(self):
         """Load full contract information for the symbols."""
@@ -118,9 +120,11 @@ class ABCScanner:
         )
         if not QueuePoller.wait_all(historical_queues, timeout=300):
             raise RuntimeError("Failed to load historical data for all Candles")
+
+        # Save the returned historical bars into a CandleSeries
         for q in historical_queues:
             candle_list = []
-            # Convert each IBKR bar to a candle
+            # Very subtle: skip the last candle because IBKR returns a partially complete candle in history
             for i in range(q.qsize()):
                 candle_list.append(q.get_nowait())
 
@@ -137,8 +141,9 @@ class ABCScanner:
         """Process real-time bars and execute accordingly."""
         while True:
             rlist = QueuePoller.poll(self._bar_queues)
-            for q in rlist:
-                LOGGER.info(f"{q.key} {q.get_nowait()}")
+            if len(rlist) > 0:
+                for q in rlist:
+                    self._candles[q.key].append(q.get_nowait())
 
     def run(self):
         """Run the application."""
@@ -146,7 +151,7 @@ class ABCScanner:
             LOGGER.info(f"Running Application with symbols {self._symbols}")
 
             # Connect to ibkr
-            self.ibkr.connect("127.0.0.1", API_PORT, CLIENT_ID)
+            self.ibkr.connect(IBKR_API_IP, IBKR_API_PORT, CLIENT_ID)
 
             # Request IBKR contracts for symbols
             self.load_contract_info()
