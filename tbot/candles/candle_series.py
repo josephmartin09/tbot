@@ -80,17 +80,15 @@ class CandleSeries:
                 f"Attempted to append an object that is not a Candle. Got {type(candle)}"
             )
 
-        if self._series[-1].time == candle.time:
-            self._series[-1] = candle
+        LOGGER.debug(f"New candle {candle.time} {candle.period}")
+        self._series.append(candle)
+        while len(self._series) > self._max_candles:
+            self._series.pop(0)
 
-        else:
-            self._series.append(candle)
-            while len(self._series) > self._max_candles:
-                self._series.pop(0)
+        # Update indicators
+        self._update_indicators()
 
-            # Update indicators
-            self._update_indicators()
-
+    @property
     def last(self):
         """Return the most recent candle in the series."""
         return self._series[-1]

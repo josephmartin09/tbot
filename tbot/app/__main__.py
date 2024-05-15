@@ -44,23 +44,97 @@ CANDLE_PERIODS = {
 }
 
 
+class PriceLevelAlert:
+    """Class to detect when price crosses a specified level."""
+
+    CROSS_ABOVE = 1
+    CROSS_BELOW = -1
+
+    def __init__(self, direction, target_price, current_price):
+        """Initialize the PriceLevelAlert.
+
+        :param int direction: CROSS_ABOVE or CROSS_BELOW
+        :param float target_price: The price this alert should trigger on
+        :param float current_price: The current price
+        """
+        self._target_price = target_price
+        self._dir = direction
+        self._triggered = False
+        self.update(current_price)
+
+    def _fire(self):
+        self._triggered = True
+
+    def reset(self):
+        """Reset the alert so it can trigger again."""
+        self._triggered = False
+
+    def update(self, price):
+        """Update the alert with a new price. This will trigger the alert if the new price crosses the target price.
+
+        :param float price: The new price level (the most recent price)
+        """
+        if self._dir == self.CROSS_ABOVE:
+            if price > self._target_price:
+                self._fire()
+
+        elif self._dir == self.CROSS_BELOW:
+            if price < self._target_price:
+                self._fire()
+
+    def triggered(self):
+        """Return the status of the alert.
+
+        :return: True if the alert was previously triggered, False otherwise
+        :rtype: bool
+        """
+        return self._triggered
+
+
 class ABCScanner:
     """Application to scan for ABCs at a key level."""
+
+    def __init__(self, name, candles):
+        """Initialize the ABCScanner.
+
+        :param string name: A name to give this strategy.
+        :param CandleSeries candles: The candle series to use by the strategy.
+        """
+        self._name = name
+        self._candles = candles
+        self._price_alert = PriceLevelAlert(
+            PriceLevelAlert.CROSS_ABOVE, 5000, self._candles.last.close
+        )
+
+    def update(self):
+        """Execute an update of the strategy.
+
+        .. note::
+            This is guaranteed to be called after a new candle is received. There's no need to check for a new candle
+        """
+        LOGGER.debug(f"Updating with {self._candles.last.close}")
+        self._price_alert.update(self._candles.last.close)
+        if self._price_alert.triggered():
+            LOGGER.warning(f"{self._name}: Price Alert triggered")
+            # self._price_alert.reset()
+
+
+class DataLoader:
+    """Class used to load data from an exchange."""
 
     def __init__(self, symbols):
         """Initialize the ABCScanner.
 
         :param list[str] symbols: The names of the continuous futures contracts to scan
         """
-        self._symbols = symbols
-
-        self._contracts = {}
-        for s in self._symbols:
-            self._contracts[s] = None
-
         self.ibkr = IBApi()
-        self._candles = {}
+
+        self._symbols = symbols
+        self._contracts = {}
+        self._candle_history = {}
+        self._candle_current = {}
         self._bar_queues = []
+        self._strategys = {}
 
     def load_contract_info(self):
         """Load full contract information for the symbols."""
@@ -124,14 +198,20 @@ class ABCScanner:
         # Save the returned historical bars into a CandleSeries
         for q in historical_queues:
             candle_list = []
-            # Very subtle: skip the last candle because IBKR returns a partially complete candle in history
-            for i in range(q.qsize()):
+            for i in range(q.qsize() - 1):
                 candle_list.append(q.get_nowait())
 
             # Convert the candles to a CandleSeries
-            self._candles[q.key] = CandleSeries(
+            self._candle_history[q.key] = CandleSeries(
                 candle_list[0].period, candle_list, len(candle_list)
             )
+
+            # Append the last candle to "forming candles"
+            self._candle_current[q.key] = q.get_nowait()
+
+            # Create a strategy
+            self._strategys[q.key] = ABCScanner(q.key, self._candle_history[q.key])
+
         LOGGER.info("Received historical lower timeframe data")
 
         # Save the real-time queues for further updates
@@ -139,11 +219,25 @@ class ABCScanner:
 
     def process_updates(self):
         """Process real-time bars and execute accordingly."""
-        while True:
-            rlist = QueuePoller.poll(self._bar_queues)
-            if len(rlist) > 0:
-                for q in rlist:
-                    self._candles[q.key].append(q.get_nowait())
+        strategy_update_keys = []
+        rlist = QueuePoller.poll(self._bar_queues)
+        if len(rlist) > 0:
+            for q in rlist:
+                new_candle = q.get_nowait()
+                if new_candle.time > self._candle_current[q.key].time:
+                    self._candle_history[q.key].append(self._candle_current[q.key])
+                    strategy_update_keys.append(q.key)
+                self._candle_current[q.key] = new_candle
+
+        return strategy_update_keys
+
+    def execute_strategies(self, update_keys):
+        """Execute requested strategies.
+
+        :param list update_keys: A list of keys whose strategies to execute for
+        """
+        for queue_key in update_keys:
+            self._strategys[queue_key].update()
 
     def run(self):
         """Run the application."""
@@ -162,7 +256,10 @@ class ABCScanner:
 
             # Processing real-time updates
             LOGGER.info("Processing real-time bar updates")
-            self.process_updates()
+            while True:
+                strategy_update_keys = self.process_updates()
+
+                self.execute_strategies(strategy_update_keys)
 
         except KeyboardInterrupt:
             LOGGER.info("Shutdown Requested")
@@ -177,5 +274,5 @@ class ABCScanner:
 if __name__ == "__main__":
     log.setup_logging()
 
-    app = ABCScanner(SYMBOLS)
+    app = DataLoader(SYMBOLS)
     app.run()
