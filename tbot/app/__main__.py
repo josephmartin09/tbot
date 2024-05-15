@@ -94,6 +94,10 @@ class PriceLevelAlert:
 class ABCScanner:
     """Application to scan for ABCs at a key level."""
 
+    WAIT_PRICE_LEVEL = 1
+    WAIT_ABC = 2
+    DONE = 3
+
     def __init__(self, name, candles):
         """Initialize the ABCScanner.
 
@@ -102,9 +106,12 @@ class ABCScanner:
         """
         self._name = name
         self._candles = candles
+        self._state = self.WAIT_PRICE_LEVEL
         self._price_alert = PriceLevelAlert(
-            PriceLevelAlert.CROSS_ABOVE, 5000, self._candles.last.close
+            PriceLevelAlert.CROSS_ABOVE, 5331, self._candles.last.high
         )
+        if self._price_alert.triggered():
+            self._state = self.WAIT_ABC
 
     def update(self):
         """Execute an update of the strategy.
@@ -112,11 +119,15 @@ class ABCScanner:
         .. note::
             This is guaranteed to be called after a new candle is received. There's no need to check for a new candle
         """
-        LOGGER.debug(f"Updating with {self._candles.last.close}")
-        self._price_alert.update(self._candles.last.close)
-        if self._price_alert.triggered():
-            LOGGER.warning(f"{self._name}: Price Alert triggered")
-            # self._price_alert.reset()
+        if self._state == self.WAIT_PRICE_LEVEL:
+            LOGGER.debug(f"Updating with {self._candles.last.high}")
+            self._price_alert.update(self._candles.last.high)
+            if self._price_alert.triggered():
+                LOGGER.warning(f"{self._name}: Price Alert triggered")
+                self._state = self.WAIT_ABC
+
+        elif self._state == self.WAIT_ABC:
+            pass
 
 
 class DataLoader:
