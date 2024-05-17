@@ -71,6 +71,11 @@ class CandleSeries:
         for ind in self._indicators.values():
             ind._update(self)
 
+    @property
+    def last(self):
+        """Return the most recent candle in the series."""
+        return self._series[-1]
+
     def append(self, candle):
         """Append a candle to the series."""
         # Check that we got a Candle
@@ -85,11 +90,6 @@ class CandleSeries:
 
         # Update indicators
         self._update_indicators()
-
-    @property
-    def last(self):
-        """Return the most recent candle in the series."""
-        return self._series[-1]
 
     def register_indicator(self, name, indicator):
         """Register an indicator to apply to this feed.

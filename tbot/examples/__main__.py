@@ -1,4 +1,4 @@
-from . import qte_4x
+from . import gann_examples
 
 if __name__ == "__main__":
-    qte_4x.run()
+    gann_examples.run()

@@ -285,4 +285,9 @@ class GannAnalysis(CandleIndicator):
         legs = self._calc_legs(series, bar_dirs)
         abcs = self._calc_abcs(series, legs)
         uturns = self._calc_uturns(series, legs)
-        return {"bars": bar_dirs, "abcs": abcs, "uturns": uturns}
+
+        result = []
+        for i in range(len(bar_dirs)):
+            result.append({"bar": bar_dirs[i], "abc": abcs[i], "uturns": uturns[i]})
+
+        return result

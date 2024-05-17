@@ -31,7 +31,7 @@ class ABCScanner:
         """Execute an update of the strategy.
 
         .. note::
-            This is guaranteed to be called after a new candle is received. There's no need to check for a new candle
+            This is guaranteed to be called directly after a new candle is received. There's no need to check for a new candle
         """
         potential_abc = self._candles.indicators["gann"].last["abcs"][-1]
         if potential_abc == GannDir.UP:
