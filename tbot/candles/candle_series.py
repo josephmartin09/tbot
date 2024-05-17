@@ -4,7 +4,6 @@ from tbot.util import log
 from .candle import Candle
 
 LOGGER = log.get_logger()
-LOGGER.setLevel("DEBUG")
 
 
 class CandleSeries:
@@ -80,7 +79,6 @@ class CandleSeries:
                 f"Attempted to append an object that is not a Candle. Got {type(candle)}"
             )
 
-        LOGGER.debug(f"New candle {candle.time} {candle.period}")
         self._series.append(candle)
         while len(self._series) > self._max_candles:
             self._series.pop(0)

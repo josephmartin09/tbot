@@ -156,9 +156,7 @@ class IBApi(EWrapper, EClient):
         """Request real-time bars for a contract."""
         reqId = self.nextReqId()
         self._queues[reqId] = queue
-        return super().reqRealTimeBars(
-            reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
-        )
+        return super().reqRealTimeBars(reqId, contract, barSize, whatToShow, useRTH, [])
 
     def realtimeBar(
         self,
