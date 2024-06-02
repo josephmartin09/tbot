@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from tbot.indicators import TalibIndicator, talib
 from tbot.indicators.qte import GannAnalysis, GannDir
 from tbot.platforms.yf import get_market_ohlc
 
@@ -21,4 +22,5 @@ def run():
 
     # Run an Indicator
     candles.register_indicator("gann", GannAnalysis())
-    print(candles.indicators["gann"].last)
+    candles.register_indicator("RSI", TalibIndicator(talib.RSI))
+    print(candles.indicators["RSI"].last)

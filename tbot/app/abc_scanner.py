@@ -3,7 +3,7 @@ from texttable import Texttable
 from tbot.indicators.qte import GannAnalysis, GannDir
 from tbot.util import log
 
-from .discord_msg import send_discord_msg
+# from .discord_msg import send_discord_msg
 
 LOGGER = log.get_logger()
 LOGGER.setLevel("DEBUG")
@@ -33,17 +33,18 @@ class ABCScanner:
         .. note::
             This is guaranteed to be called directly after a new candle is received. There's no need to check for a new candle
         """
-        potential_abc = self._candles.indicators["gann"].last["abcs"][-1]
+        LOGGER.debug(f"Updating {self._name}")
+        potential_abc = self._candles.indicators["gann"].last["abc"]
         if potential_abc == GannDir.UP:
             LOGGER.info(f"Notifying ABC UP for {self._name}")
             table_msg = Texttable()
             table_msg.add_row(["Symbol", "ABC Time", "Direction"])
             table_msg.add_row([self._name, self._candles.last.time, "SHORT"])
-            send_discord_msg(table_msg.draw())
+            # send_discord_msg(table_msg.draw())
 
         elif potential_abc == GannDir.DOWN:
             LOGGER.info(f"Notifying ABC DOWN for {self._name}")
             table_msg = Texttable()
             table_msg.add_row(["Symbol", "ABC Time", "Direction"])
             table_msg.add_row([self._name, self._candles.last.time, "LONG"])
-            send_discord_msg(table_msg.draw())
+            # send_discord_msg(table_msg.draw())

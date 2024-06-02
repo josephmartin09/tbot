@@ -49,13 +49,14 @@ CANDLE_PERIODS = {
 class IbkrLoader:
     """Class used to load data from the IBKR exchange."""
 
-    def __init__(self, symbols):
+    def __init__(self, symbols, realtime=True):
         """Initialize the ABCScanner.
 
         :param list[str] symbols: The names of the continuous futures contracts to scan
         """
         self.ibkr = IBApi()
 
+        self._realtime = realtime
         self._symbols = symbols
         self._contracts = {}
         self._candle_history = {}
@@ -113,7 +114,7 @@ class IbkrLoader:
                     self._contracts[s],
                     period,
                     False,
-                    True,
+                    self._realtime,
                 )
 
         # Wait for initial historical data to be returned
@@ -183,11 +184,15 @@ class IbkrLoader:
             self.request_candles()
 
             # Processing real-time updates
-            LOGGER.info("Processing real-time bar updates")
-            while True:
-                strategy_update_keys = self.process_updates()
+            if self._realtime:
+                LOGGER.info("Processing real-time bar updates")
+                while True:
+                    strategy_update_keys = self.process_updates()
 
-                self.execute_strategies(strategy_update_keys)
+                    self.execute_strategies(strategy_update_keys)
+            else:
+                LOGGER.warning("Returning because realtime data not requested.")
+                return self._candle_history
 
         except KeyboardInterrupt:
             LOGGER.info("Shutdown Requested")

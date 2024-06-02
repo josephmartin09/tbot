@@ -10,13 +10,10 @@ class ConfigStore(Mapping):
     it is often helpful to allow them to read it.
     """
 
-    def __init__(self, init_data, copy_on_access=True):
+    def __init__(self, init_data):
         """Initialize the ConfigStore.
 
         :param dict init_data: The configuration information to store as read-only. Presumably this comes from an init routine that first validated it
-        :param bool copy_on_access: If True, retrieving config values will cause the contents to be copied. This prevents
-            the user of the config from modifying the internal data store. If False, the contents of the internal data store are returned. This
-            is not reccommended, but can be used if copying the config would be inneficient in a critical-section of code.
         """
         if not isinstance(init_data, dict):
             raise TypeError(
