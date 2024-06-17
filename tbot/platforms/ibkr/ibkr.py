@@ -6,7 +6,7 @@ from decimal import Decimal
 from threading import Event, Thread
 
 from ibapi.client import EClient
-from ibapi.common import BarData, TagValueList, TickerId
+from ibapi.common import BarData, TickerId
 from ibapi.contract import Contract
 from ibapi.wrapper import EWrapper
 
@@ -145,18 +145,12 @@ class IBApi(EWrapper, EClient):
 
     # Real-time Bars
     def reqRealTimeBars(
-        self,
-        queue: UpdateQueue,
-        contract: Contract,
-        barSize: TickerId,
-        whatToShow: str,
-        useRTH: bool,
-        realTimeBarsOptions: TagValueList,
+        self, queue: UpdateQueue, contract: Contract, whatToShow: str, useRTH: bool
     ):
         """Request real-time bars for a contract."""
         reqId = self.nextReqId()
         self._queues[reqId] = queue
-        return super().reqRealTimeBars(reqId, contract, barSize, whatToShow, useRTH, [])
+        return super().reqRealTimeBars(reqId, contract, 5, whatToShow, useRTH, [])
 
     def realtimeBar(
         self,
