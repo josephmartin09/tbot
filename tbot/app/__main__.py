@@ -4,6 +4,7 @@ from tbot.platforms.ibkr.queues import QueuePoller
 from tbot.util import log
 
 from .ibkr_rt_price import IbkrRtPrice
+from .symbol_manager import SymbolManager
 
 # from .ibkr_loader import SYMBOLS
 
@@ -20,20 +21,21 @@ class App:
 
     def __init__(self):
         """Initialize the application."""
-        self._feeds = []
+        self._queues = {}
+        self._feeds = {}
 
-    def run(self):
+    def _run(self):
         """Run the application."""
         try:
             LOGGER.info("Running.")
             ibkr = IbkrRtPrice(["ES"])
             ibkr.connect()
-            self._feeds = ibkr.request_price_feed()
+            self._queues = ibkr.request_price_feed()
             while True:
-                ready = QueuePoller.poll(self._feeds.values(), 0.1)
+                ready = QueuePoller.poll(self._queues.values(), 0.1)
                 for r in ready:
-                    update = r.get_nowait()
-                    LOGGER.info(update)
+                    price_update = r.get_nowait()
+                    LOGGER.info(price_update)
 
         except KeyboardInterrupt:
             LOGGER.info("Keyboard Interrupt")
@@ -43,6 +45,11 @@ class App:
 
         finally:
             ibkr.disconnect()
+
+    def run(self):
+        """Run the application."""
+        mgr = SymbolManager()
+        print(mgr)
 
 
 if __name__ == "__main__":

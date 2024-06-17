@@ -87,7 +87,7 @@ class IbkrRtPrice:
 
         feed_queues = {}
         for symbol, contract in self._contracts.items():
-            update_queue = UpdateQueue()
+            update_queue = UpdateQueue(key=symbol)
             self.ibkr.reqRealTimeBars(update_queue, contract, "TRADES", False)
             feed_queues[symbol] = update_queue
 
