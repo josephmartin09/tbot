@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pytz
 import yfinance as yf
 
-from tbot.candles import Candle, CandleSeries
+from tbot.candles import Candle, CandlePeriod, CandleSeries
 from tbot.util import log
 
 log.disable_sublogger("yfinance")
@@ -59,6 +59,8 @@ def get_market_ohlc(symbol, period, end_dt, tz_str=None):
         start=(end_dt - lookback[period]).date(),
         end=(end_dt.date()),
     )
+    if len(data) == 0:
+        raise RuntimeError(f"No data returned for {symbol}")
 
     # YFinance doesn't seem to use timezone on daily or larger candles.
     # The workaround is to remove any timezone it returns, then use US/Eastern, which is what yahoo
@@ -84,7 +86,7 @@ def get_market_ohlc(symbol, period, end_dt, tz_str=None):
     for index, row in data.iterrows():
         candles.append(
             Candle(
-                period,
+                CandlePeriod.from_timedelta(period),
                 index.to_pydatetime(),
                 row["Open"],
                 row["High"],
@@ -93,4 +95,4 @@ def get_market_ohlc(symbol, period, end_dt, tz_str=None):
                 row["Volume"],
             )
         )
-    return CandleSeries(period, candles, len(candles))
+    return CandleSeries(CandlePeriod.from_timedelta(period), candles, len(candles))

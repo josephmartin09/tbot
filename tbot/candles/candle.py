@@ -4,7 +4,7 @@ class Candle:
     def __init__(self, period, time, c_open, c_high, c_low, c_close, c_volume):
         """Initialize the candle.
 
-        :param datetime.timedelta period: The time-period of the candle
+        :param CandlePeriod period: The time-period of the candle
         :param datetime.datetime time: Time of candle open
         :param float c_open: Open price of the candle
         :param float c_high: High price of the candle
@@ -12,8 +12,9 @@ class Candle:
         :param float c_close: Close price of the candle
         :param float c_volume: Trading volume during candle
         """
-        self.time = time
         self.period = period
+        self._period_dt = period.as_timedelta()
+        self.time = time
         self.open = c_open
         self.high = c_high
         self.low = c_low
@@ -24,6 +25,7 @@ class Candle:
         """Return a string representation of the candle."""
         ret_str = ""
         ret_str += f"Time: {self.time}, "
+        ret_str += f"Period: {self.period}, "
         ret_str += f"O: {self.open}, "
         ret_str += f"H: {self.high}, "
         ret_str += f"L: {self.low}, "
