@@ -1,7 +1,9 @@
+from abc import ABC, abstractmethod
+
 from tbot.indicators import Indicator
 
 
-class SymbolListener:
+class SymbolListener(ABC):
     """Class to receive updates for a symbol feed from the symbol manager."""
 
     def __init__(self, symbol, period):
@@ -26,17 +28,12 @@ class SymbolListener:
             This is meant to be called only by the symbol manager object.
         """
         self._feed = new_feed
-        self._has_update = True
+        self.on_update()
 
-    def has_update(self):
-        """Report the availability of a new feed update.
-
-        :return: True if there's been a feed update since the last call of this function, False otherwise
-        :rtype: bool
-        """
-        has_update = self._has_update
-        self._has_update = False
-        return has_update
+    @abstractmethod
+    def on_update(self):
+        """Run user-defined logic as a result of a feed update."""
+        pass
 
     @property
     def symbol(self):

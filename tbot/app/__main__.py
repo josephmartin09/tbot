@@ -13,9 +13,9 @@ from .symbol_manager import SymbolManager
 LOGGER = log.get_logger()
 LOGGER.setLevel("DEBUG")
 
-SYM = "HG"
-EXCHANGE = "COMEX"
-PD = CandlePeriod("5m")
+SYM = "ES"
+EXCHANGE = "CME"
+PD = CandlePeriod("1m")
 
 
 class Notes(SymbolListener):
@@ -43,8 +43,9 @@ class Notes(SymbolListener):
 
         self.notes.sort()
 
-    def run(self):
+    def on_update(self):
         """Run the check for a note crossing on the most recent candle."""
+        LOGGER.debug(f"Running on {self.symbol}-{self.period}")
         last_high = self.feed.last.high
         last_low = self.feed.last.low
         last_time = self.feed.last.time
@@ -66,32 +67,31 @@ class App:
 
     def run(self):
         """Run the application."""
-        # Hack to replay part of the series
-        ib = IBWrapper()
-        candles_raw = ib.historical_data(SYM, PD, exchange=EXCHANGE)
-        candles = []
-        for cr in candles_raw:
-            candles.append(
-                Candle(
-                    PD,
-                    datetime.fromtimestamp(cr["time"]),
-                    cr["open"],
-                    cr["high"],
-                    cr["low"],
-                    cr["close"],
-                    cr["volume"],
-                )
-            )
-
-        notes_listener = Notes()
-        self.mgr.add_listener(notes_listener)
-        self.mgr.add_feed(SYM, PD, CandleSeries(PD, candles[0:2], 500))
-
         try:
-            for c in candles[2:]:
-                self.mgr.update_feed(SYM, PD, c)
-                if notes_listener.has_update():
-                    notes_listener.run()
+            # Load a live IBKR data feed
+            ib = IBWrapper(self.mgr)
+            candles_raw = ib.live_data(SYM, PD, exchange=EXCHANGE)
+            candles = []
+            for cr in candles_raw:
+                candles.append(
+                    Candle(
+                        PD,
+                        datetime.fromtimestamp(cr["time"]),
+                        cr["open"],
+                        cr["high"],
+                        cr["low"],
+                        cr["close"],
+                        cr["volume"],
+                    )
+                )
+
+            # Register a strategy
+            notes_listener = Notes()
+            self.mgr.add_listener(notes_listener)
+            self.mgr.add_feed(SYM, PD, CandleSeries(PD, candles[0:2], 500))
+
+            # Run
+            ib.event_loop()
 
         except KeyboardInterrupt:
             pass

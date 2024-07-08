@@ -1,4 +1,9 @@
+from datetime import datetime
+from functools import partial
+
 from ib_insync import IB, ContFuture
+
+from tbot.candles import Candle
 
 CLIENT_ID = 78258
 CLIENT_PORT = 4002
@@ -34,10 +39,14 @@ class IBWrapper:
         "1w": "3 Y",
     }
 
-    def __init__(self):
-        """Initialize the IB API."""
+    def __init__(self, mgr):
+        """Initialize the IB API.
+
+        :param SymbolManager mgr: A reference to the symbol manager
+        """
         self.ib = IB()
         self.ib.connect("127.0.0.1", CLIENT_PORT, clientId=CLIENT_ID, readonly=True)
+        self.mgr = mgr
 
     def disconnect(self):
         """Disconnect from the IB API."""
@@ -94,3 +103,77 @@ class IBWrapper:
             )
 
         return candles
+
+    def on_bar_update(self, symbol, period, bar_list, has_new):
+        """Process a bar update from reqHistoricalData streaming."""
+        if has_new:
+            # This should be what's returned/sent out the door
+            last_bar = bar_list[-2]
+            candle_raw = {
+                "time": last_bar.date.timestamp(),
+                "period": period.as_str(),
+                "open": last_bar.open,
+                "high": last_bar.high,
+                "low": last_bar.low,
+                "close": last_bar.close,
+                "volume": last_bar.volume,
+            }
+
+            # I did this in another step because it should move into sym manager
+            candle = Candle(
+                period,
+                datetime.fromtimestamp(candle_raw["time"]),
+                candle_raw["open"],
+                candle_raw["high"],
+                candle_raw["low"],
+                candle_raw["close"],
+                candle_raw["volume"],
+            )
+            self.mgr.update_feed(symbol, period, candle)
+
+    def live_data(self, symbol, period, exchange=""):
+        """Return historical data for a symbol.
+
+        :param str symbol: The symbol name
+        :param CandlePeriod period: The candle period
+        :param str exchange: The exchange the symbol is listed on
+        :return: A list of candles, in dictionary format
+        """
+        contract = self.future_lookup(symbol, exchange=exchange)
+        candles = []
+        pd_str = period.as_str()
+
+        bars = self.ib.reqHistoricalData(
+            contract,
+            "",
+            self.lookback[pd_str],
+            self.period_lookup[pd_str],
+            "TRADES",
+            False,  # useRTH is False to use ETH
+            formatDate=1,  # Local Timezone (Use 2 for UTC)
+            keepUpToDate=True,
+        )
+
+        for b in bars:
+            candles.append(
+                {
+                    "time": b.date.timestamp(),
+                    "period": pd_str,
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                }
+            )
+        bars.updateEvent += partial(self.on_bar_update, symbol, period)
+
+        return candles
+
+    def event_loop(self):
+        """Run the IB event loop to process live data.
+
+        .. note::
+            This will block indefinitely
+        """
+        self.ib.run()
