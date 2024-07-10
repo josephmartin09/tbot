@@ -15,9 +15,17 @@ def discord_fmt(msg):
     return f"```\n{msg}\n```"
 
 
-def send_discord_msg(msg):
+def send_fmt_msg(msg):
     """Send a post request to discord."""
     payload = {
         "content": discord_fmt(msg),
+    }
+    requests.post(DISCORD_URL, json=payload)
+
+
+def send_discord_msg(msg):
+    """Send a post request to discord."""
+    payload = {
+        "content": msg,
     }
     requests.post(DISCORD_URL, json=payload)

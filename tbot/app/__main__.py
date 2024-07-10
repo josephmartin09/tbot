@@ -5,15 +5,14 @@ from tbot.candles import Candle, CandlePeriod, CandleSeries
 from tbot.platforms.ibkr import IBWrapper
 from tbot.util import log
 
+from .discord_msg import send_discord_msg
 from .symbol_listener import SymbolListener
 from .symbol_manager import SymbolManager
-
-# from .ibkr_loader import SYMBOLS
 
 LOGGER = log.get_logger()
 LOGGER.setLevel("DEBUG")
 
-PD = CandlePeriod("1m")
+PD = CandlePeriod("3m")
 
 EXCHANGE_LOOKUP = {
     # Metals
@@ -61,15 +60,17 @@ class Notes(SymbolListener):
 
     def on_update(self):
         """Run the check for a note crossing on the most recent candle."""
-        LOGGER.debug(
-            f"Running on {self.symbol}-{self.period}. Last candle start {self.feed.last.time}"
-        )
+        # LOGGER.debug(
+        #     f"Running on {self.symbol}-{self.period}. Last candle start {self.feed.last.time}"
+        # )
         last_high = self.feed.last.high
         last_low = self.feed.last.low
         last_time = self.feed.last.time
         for n in self.notes:
             if (last_low <= n) and (last_high >= n):
-                LOGGER.warning(f"{self.symbol} at {n} at {last_time}")
+                msg = f"{self.symbol} at {n} at {last_time}"
+                LOGGER.warning(msg)
+                send_discord_msg(msg)
 
 
 class App:
@@ -89,6 +90,7 @@ class App:
 
         try:
             LOGGER.info("Initializing Candles")
+            send_discord_msg("Launching TBOT Scanner")
             for symbol, exchange in EXCHANGE_LOOKUP.items():
                 # Load a live IBKR data feed
                 candles_raw = ib.live_data(symbol, PD, exchange=exchange)
@@ -112,6 +114,7 @@ class App:
                 self.mgr.add_feed(symbol, PD, CandleSeries(PD, candles, 500))
 
             # Run
+            LOGGER.info("Running Event loop")
             ib.event_loop()
 
         except KeyboardInterrupt:
