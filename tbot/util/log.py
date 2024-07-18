@@ -1,14 +1,45 @@
+import inspect
 import logging
 import time
 
 import coloredlogs
 
 
-def setup_logging(logfile="app.log", utc_time=False):
+def get_root_logger():
+    """Return an instance to the root logger."""
+    return logging.getLogger()
+
+
+def get_logger():
+    """Return an instance to a logger unique to the __name__ of the callee."""
+    frm = inspect.stack()[1]
+    mod = inspect.getmodule(frm[0])
+    return logging.getLogger(mod.__name__)
+
+
+def enable_sublogger(logger_name):
+    """Enable a sub-logger by name.
+
+    :param str logger_name: Name of the logger to enable
+    """
+    root_level = get_root_logger().level
+    logging.getLogger(logger_name).setLevel(root_level)
+
+
+def disable_sublogger(logger_name):
+    """Disable a sub-logger by name.
+
+    :param str logger_name: Name of the logger to disable
+    """
+    logging.getLogger(logger_name).setLevel(logging.CRITICAL)
+
+
+def setup_logging(logfile="app.log", utc_time=False, root_level=logging.INFO):
     """Configure the root logger with both a command line logger and a file logger.
 
     :param str logfile: Desired logfile name
     :param bool utc_time: Log time in UTC if True. Otherwise log in OS-local time.
+    :param logging.level root_level: Default logging level of root logger. Defaults to INFO
     """
     # Setup logging
     logger = get_root_logger()
@@ -57,27 +88,5 @@ def setup_logging(logfile="app.log", utc_time=False):
     h.setFormatter(formatter)
     logger.addHandler(h)
 
-    # Set the root level to DEBUG, allowing sub loggers to set their own levels
-    logger.setLevel("DEBUG")
-
-
-def get_root_logger():
-    """Return an instance to the root logger."""
-    return logging.getLogger()
-
-
-def enable_sublogger(logger_name):
-    """Enable a sub-logger by name.
-
-    :param str logger_name: Name of the logger to enable
-    """
-    root_level = get_root_logger().getLevel()
-    logging.getLogger(logger_name).setLevel(root_level)
-
-
-def disable_sublogger(logger_name):
-    """Disable a sub-logger by name.
-
-    :param str logger_name: Name of the logger to disable
-    """
-    logging.getLogger(logger_name).setLevel(logging.CRITICAL)
+    # Set default logging level
+    logger.setLevel(root_level)

@@ -9,10 +9,10 @@ class CandleIndicator(Indicator):
     def __init__(self):
         """Initialize the indicator."""
         super().__init__()
-        self._result = []
+        self._result = None
 
     def _update(self, series):
-        self._result.append(self.update(series))
+        self._result = self.update(series)
 
     @abstractmethod
     def update(self, series):
@@ -25,10 +25,9 @@ class CandleIndicator(Indicator):
     @property
     def last(self):
         """Return the last value in the indicator, which corresponds to the most recent point in time."""
-        if self._result is None:
-            return None
-
-        return self._result[-1]
+        if self._result is not None:
+            return self._result[-1]
+        return None
 
     @property
     def data(self):

@@ -1,309 +1,179 @@
-import queue
-import threading
-import time
-from datetime import datetime, timedelta
-from decimal import Decimal
-from queue import Queue
-from threading import Event
+from datetime import datetime
+from functools import partial
 
-from ibapi.client import EClient
-from ibapi.common import BarData, TagValueList, TickAttrib, TickAttribBidAsk, TickerId
-from ibapi.contract import Contract
-from ibapi.wrapper import EWrapper
+from ib_insync import IB, ContFuture
 
-from tbot.candles import Candle, CandleSeries
+from tbot.candles import Candle
 
-API_PORT = 4002
 CLIENT_ID = 78258
+CLIENT_PORT = 4002
 
 
-class IBApi(EWrapper, EClient):
-    """Class to implement IBApi Wrapper."""
+class IBWrapper:
+    """A wrapper class around ib_insync."""
 
-    def __init__(self):
-        """Initialize the parent IB Classes."""
-        EClient.__init__(self, self)
+    period_lookup = {
+        "1m": "1 min",
+        "2m": "2 mins",
+        "3m": "3 mins",
+        "5m": "5 mins",
+        "10m": "10 mins",
+        "15m": "15 mins",
+        "30m": "30 mins",
+        "1h": "1 hour",
+        "4h": "4 hours",
+        "1d": "1 day",
+        "1w": "1 week",
+    }
 
-        self._queues = {}
-        self._reqId = 0
-        self._connect_evt = Event()
+    lookback = {
+        "1m": "1 D",
+        "2m": "2 D",
+        "3m": "3 D",
+        "5m": "5 D",
+        "10m": "10 D",
+        "15m": "15 D",
+        "1h": "60 D",
+        "4h": "180 D",
+        "1d": "1 Y",
+        "1w": "3 Y",
+    }
 
-    @property
-    def reqId(self):
-        """Return the next available request ID."""
-        self._reqId += 1
-        return self._reqId
+    def __init__(self, mgr):
+        """Initialize the IB API.
 
-    def error(self, reqId, errorCode, errorString, *args):
-        """Receive errors from api callback."""
-        print(errorCode, errorString)
-
-    def nextValidId(self, id):
-        """Receive connection validation.
-
-        .. note::
-            For now, it's being used to indicate connection success
+        :param SymbolManager mgr: A reference to the symbol manager
         """
-        print("CONNECTION SUCCESS")
+        self.ib = IB()
+        self.ib.connect("127.0.0.1", CLIENT_PORT, clientId=CLIENT_ID, readonly=True)
+        self.mgr = mgr
 
-    def reqContractDetails(self, contract: Contract):
-        """Request full contract details for a contract."""
-        self._queues["contractDetails"] = Queue()
-        super().reqContractDetails(self.reqId, contract)
-        return self._queues["contractDetails"]
+    def disconnect(self):
+        """Disconnect from the IB API."""
+        self.ib.disconnect()
 
-    def contractDetails(self, reqId, contractDetails):
-        """Receive contract details from callback."""
-        self._queues["contractDetails"].put(contractDetails)
+    def future_lookup(self, symbol, exchange=""):
+        """Attempt to lookup the futures contract from symbol.
 
-    def reqHistoricalData(
-        self,
-        contract: Contract,
-        endDateTime: str,
-        durationStr: str,
-        barSizeSetting: str,
-        whatToShow: str,
-        useRTH: TickerId,
-        formatDate: TickerId,
-        keepUpToDate: bool,
-        chartOptions: TagValueList,
-    ):
-        """Request historical bar data for a contract."""
-        self._queues["historicalData"] = Queue()
-        super().reqHistoricalData(
-            self.reqId,
-            contract,
-            endDateTime,
-            durationStr,
-            barSizeSetting,
-            whatToShow,
-            useRTH,
-            formatDate,
-            keepUpToDate,
-            chartOptions,
-        )
-        return self._queues["historicalData"]
-
-    def historicalData(self, reqId: TickerId, bar: BarData):
-        """Receive historical data form callback."""
-        super().historicalData(reqId, bar)
-        self._queues["historicalData"].put(bar)
-
-    def reqTickByTickData(
-        self,
-        contract: Contract,
-        tickType: str,
-        numberOfTicks: TickerId,
-        ignoreSize: bool,
-    ):
-        """Request bid/ask quotes."""
-        self._queues["tickData"] = Queue()
-        super().reqTickByTickData(
-            self.reqId, contract, tickType, numberOfTicks, ignoreSize
-        )
-        return self._queues["tickData"]
-
-    def tickByTickBidAsk(
-        self,
-        reqId: TickerId,
-        time: TickerId,
-        bidPrice: float,
-        askPrice: float,
-        bidSize: Decimal,
-        askSize: Decimal,
-        tickAttribBidAsk: TickAttribBidAsk,
-    ):
-        """Receive bid/ask quotes from callback.
-
-        .. note::
-            This is what I originally called "quote".  It's the most recent bid/ask after a transaction took
-            place.
+        :param str symbol: The symbol name
+        :param str exchange: The exchange the symbol is listed on
+        :rtype: Contract
         """
-        self._queues["tickData"].put(
-            {
-                "time": time,
-                "bidPrice": bidPrice,
-                "askPrice": askPrice,
-                "bidSize": bidSize,
-                "askSize": askSize,
-                "tickAttribBidAsk": tickAttribBidAsk,
-            }
-        )
+        details = self.ib.reqContractDetails(
+            ContFuture(symbol=symbol, exchange=exchange)
+        )[0]
+        contract = details.contract
+        contract.secType = "FUT"
+        return contract
 
-    def reqMktData(
-        self,
-        contract: Contract,
-        genericTickList: str,
-        snapshot: bool,
-        regulatorySnapshot: bool,
-        mktDataOptions: TagValueList,
-    ):
-        """Request tick data for a contract."""
-        print(
-            "WARNING: Ignoring snapshot and regulatorySnapshot parameters to avoid paying for snapshots."
-        )
-        self._queues["mktData"] = Queue()
-        super().reqMktData(
-            self.reqId, contract, genericTickList, False, False, mktDataOptions
-        )
-        return self._queues["mktData"]
+    def historical_data(self, symbol, period, exchange=""):
+        """Return historical data for a symbol.
 
-    def tickPrice(
-        self, reqId: TickerId, tickType: TickerId, price: float, attrib: TickAttrib
-    ):
-        """Receive price ticks from the market data feed.
-
-        .. note::
-            Please see https://ibkrcampus.com/ibkr-api-page/twsapi-doc/#available-tick-types
+        :param str symbol: The symbol name
+        :param CandlePeriod period: The candle period
+        :param str exchange: The exchange the symbol is listed on
+        :return: A list of candles, in dictionary format
         """
-        if tickType == 1:
-            self._queues["mktData"].put(
-                {"tickType": tickType, "price": price, "attrib": attrib, "dir": "BID"}
-            )
-        elif tickType == 2:
-            self._queues["mktData"].put(
-                {"tickType": tickType, "price": price, "attrib": attrib, "dir": "ASK"}
-            )
-
-    def tickSize(self, reqId: TickerId, tickType: TickerId, size: Decimal):
-        """Receive size ticks from the market data feed."""
-        if tickType == 86:
-            self._queues["mktData"].put({"tickType": tickType, "size": size})
-
-    def tickGeneric(self, reqId: TickerId, tickType: TickerId, value: float):
-        """Receive generic ticks from the market data feed."""
-        self._queues["mktData"].put({"tickType": tickType, "value": value})
-
-    def tickString(self, reqId: TickerId, tickType: TickerId, value: str):
-        """Receive string ticks from the market data feed."""
-        # These are most recent T&S tick
-        if tickType == 48 or tickType == 77:
-            self._queues["mktData"].put({"tickType": tickType, "value": value})
-
-
-# Application code start
-periods = {
-    timedelta(minutes=1): "1 mins",
-    timedelta(minutes=2): "2 mins",
-    timedelta(minutes=3): "3 mins",
-    timedelta(minutes=5): "5 mins",
-    timedelta(minutes=10): "10 mins",
-    timedelta(minutes=15): "15 mins",
-    timedelta(hours=1): "1 hour",
-    timedelta(days=1): "1 day",
-    timedelta(weeks=1): "1 week",
-}
-
-lookback = {
-    timedelta(minutes=1): "1 D",
-    timedelta(minutes=2): "2 D",
-    timedelta(minutes=3): "3 D",
-    timedelta(minutes=5): "5 D",
-    timedelta(minutes=10): "10 D",
-    timedelta(minutes=15): "2 W",
-    timedelta(hours=1): "3 W",
-    timedelta(days=1): "2 M",
-    timedelta(weeks=1): "6 M",
-}
-
-
-def get_market_ohlc(symbol, period, end_dt, tz_str=None):
-    """Return YFinance's market OHLC for the symbol.
-
-    :param str symbol: The symbol to request
-    :param timedelta period: The candle period
-    :param datetime end_dt: The most recent date to receive candles for
-    :param str tz_str: pytz string specifying timezone to return the data in.  If None, the computer's local timezone will be used
-
-    .. note::
-        The start of the series is determined by the candle period. The lookback table is defined as follows
-
-    .. code-block::
-
-        lookback = {
-            timedelta(minutes=1): "1 D",
-            timedelta(minutes=2): "2 D",
-            timedelta(minutes=3): "3 D",
-            timedelta(minutes=5): "5 D",
-            timedelta(minutes=10): "10 D",
-            timedelta(minutes=15): "2 W",
-            timedelta(hours=1): "3 W",
-            timedelta(days=1): "2 M",
-            timedelta(weeks=1): "6 M",
-        }
-
-    """
-    app = IBApi()
-    app.connect("127.0.0.1", API_PORT, CLIENT_ID)
-
-    api_thread = threading.Thread(target=app.run)
-    api_thread.start()
-
-    # How to get rid of this sleep?
-    time.sleep(1)
-
-    bars = list()
-    try:
-        print("ignore symbol and just use ES")
-        contract = Contract()
-        contract.symbol = "ES"
-        contract.secType = "CONTFUT"
-        contract.currency = "USD"
-        contract.exchange = "CME"
-
-        print("Loading contract")
-        fullContract = app.reqContractDetails(contract).get(timeout=1.0).contract
-        print(fullContract)
-
-        print("Loading Historical Data")
-        # Am I supposed to give a endDate to know when to stop parsing?  That seems to be the "right" way
-        respQueue = app.reqHistoricalData(
-            contract, "", lookback[period], periods[period], "TRADES", 0, 2, False, []
-        )
-        while True:
-            try:
-                bars.append(respQueue.get(timeout=0.25))
-            except queue.Empty:
-                if len(bars) > 0:
-                    break
-
-    except KeyboardInterrupt:
-        pass
-
-    except Exception as e:
-        print(str(e))
-
-    finally:
-        app.disconnect()
-
-        if len(bars) == 0:
-            return []
-
+        contract = self.future_lookup(symbol, exchange=exchange)
         candles = []
+        pd_str = period.as_str()
+
+        bars = self.ib.reqHistoricalData(
+            contract,
+            "",
+            self.lookback[pd_str],
+            self.period_lookup[pd_str],
+            "TRADES",
+            False,  # useRTH is False to use ETH
+            formatDate=1,  # Local Timezone (Use 2 for UTC)
+            keepUpToDate=False,
+        )
+
         for b in bars:
             candles.append(
-                Candle(
-                    period,
-                    datetime.fromtimestamp(int(b.date)).astimezone(tz_str),
-                    float(b.open),
-                    float(b.high),
-                    float(b.low),
-                    float(b.close),
-                    float(b.volume),
-                )
+                {
+                    "time": b.date.timestamp(),
+                    "period": pd_str,
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                }
             )
-        return CandleSeries(period, candles, len(candles))
 
+        return candles
 
-# # Stuff I need eventually
-# print("Requesting Top of Book Quotes")
-# tickQueue = app.reqTickByTickData(fullContract, "BidAsk", 0, False)
+    def on_bar_update(self, symbol, period, bar_list, has_new):
+        """Process a bar update from reqHistoricalData streaming."""
+        if has_new:
+            # This should be what's returned/sent out the door
+            last_bar = bar_list[-2]
+            candle_raw = {
+                "time": last_bar.date.timestamp(),
+                "period": period.as_str(),
+                "open": last_bar.open,
+                "high": last_bar.high,
+                "low": last_bar.low,
+                "close": last_bar.close,
+                "volume": last_bar.volume,
+            }
 
-# print("Requesting Market data")
-# tickQueue = app.reqMktData(fullContract, "375", False, False, [])
+            # I did this in another step because it should move into sym manager
+            candle = Candle(
+                period,
+                datetime.fromtimestamp(candle_raw["time"]),
+                candle_raw["open"],
+                candle_raw["high"],
+                candle_raw["low"],
+                candle_raw["close"],
+                candle_raw["volume"],
+            )
+            self.mgr.update_feed(symbol, period, candle)
 
-# while True:
-#     try:
-#         print(tickQueue.get(timeout=0.25))
-#     except queue.Empty:
-#         pass
+    def live_data(self, symbol, period, exchange=""):
+        """Return historical data for a symbol.
+
+        :param str symbol: The symbol name
+        :param CandlePeriod period: The candle period
+        :param str exchange: The exchange the symbol is listed on
+        :return: A list of candles, in dictionary format
+        """
+        contract = self.future_lookup(symbol, exchange=exchange)
+        candles = []
+        pd_str = period.as_str()
+
+        bars = self.ib.reqHistoricalData(
+            contract,
+            "",
+            self.lookback[pd_str],
+            self.period_lookup[pd_str],
+            "TRADES",
+            False,  # useRTH is False to use ETH
+            formatDate=1,  # Local Timezone (Use 2 for UTC)
+            keepUpToDate=True,
+        )
+
+        for b in bars:
+            candles.append(
+                {
+                    "time": b.date.timestamp(),
+                    "period": pd_str,
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                }
+            )
+        bars.updateEvent += partial(self.on_bar_update, symbol, period)
+
+        return candles
+
+    def event_loop(self):
+        """Run the IB event loop to process live data.
+
+        .. note::
+            This will block indefinitely
+        """
+        self.ib.run()

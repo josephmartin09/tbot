@@ -1,10 +1,6 @@
-from collections import namedtuple
-
 from tbot.indicators.candle_indicator import CandleIndicator
 
 from .gann_dir import GannDir
-
-Leg = namedtuple("Leg", ["dir", "start_ind", "end_ind", "low", "high"])
 
 
 class GannAnalysis(CandleIndicator):
@@ -46,8 +42,8 @@ class GannAnalysis(CandleIndicator):
                 elif (curr.low < prev.low) and (curr.high < prev.high):
                     bar_dirs.append(GannDir.DOWN)
 
-                # Inside bar: For non-hoagies, an inside bar is strictly smaller than the previous bar
-                elif (curr.high < prev.high) and (curr.low > prev.low):
+                # Inside bar
+                elif (curr.high <= prev.high) and (curr.low >= prev.low):
                     bar_dirs.append(bar_dirs[-1])
                     hoagie_active = True
                     hoagie_candle = prev
@@ -72,7 +68,7 @@ class GannAnalysis(CandleIndicator):
                     hoagie_active = False
                     hoagie_candle = None
 
-                # Inside bar: For hoagies, a same size bar doesn't break the hoagie. To account for this, count it as an inside bar
+                # Inside bar
                 elif (curr.high <= hoagie_candle.high) and (
                     curr.low >= hoagie_candle.low
                 ):
@@ -285,4 +281,11 @@ class GannAnalysis(CandleIndicator):
         legs = self._calc_legs(series, bar_dirs)
         abcs = self._calc_abcs(series, legs)
         uturns = self._calc_uturns(series, legs)
-        return {"bars": bar_dirs, "abcs": abcs, "uturns": uturns}
+
+        result = []
+        for i in range(len(bar_dirs)):
+            result.append(
+                {"direction": bar_dirs[i], "abc": abcs[i], "uturn": uturns[i]}
+            )
+
+        return result
