@@ -8,11 +8,11 @@ LOGGER = log.get_logger()
 class CandleSeries:
     """Class to represent a time-continous series of candles."""
 
-    def __init__(self, period, candles, max_candles):
+    def __init__(self, period, initial_candles, max_candles=2500):
         """Initialize the candle series.
 
         :param CandlePeriod period: The elapsed time of a candle in this series.
-        :param list candles: A list of candles. The candles must all have the same period and be in ascending chronological order
+        :param list initial_candles: A starting list of candles. The candles must all have the same period and be in ascending chronological order
         :param int max_candles: The maximum number of candles to store. This parameter is required because it is impractical
             to keep an infinite number of candles in memory over a long-duration run. It also ensure that indicator calculations
             won't be re-run on the entire historical dataset.
@@ -24,7 +24,7 @@ class CandleSeries:
         self.period = period
         self._period_dt = period.as_timedelta()
         self._max_candles = max_candles
-        self._series = candles[-max_candles:]
+        self._series = initial_candles[-max_candles:]
 
         self._validate()
 

@@ -14,13 +14,13 @@ class SymbolManager:
         """Initialize the symbol manager."""
         super().__init__()
         self._symbols = {}
-        self._listeners = []
+        self._subscribers = []
 
-    def _invoke_listeners(self, feed_key):
-        for listener in self._listeners:
-            listner_key = self._to_key(listener.symbol, listener.period)
-            if feed_key == listner_key:
-                listener.process_update(self._symbols[feed_key])
+    def _invoke_subscribers(self, feed_key):
+        for subscriber in self._subscribers:
+            sub_key = self._to_key(subscriber.symbol, subscriber.period)
+            if feed_key == sub_key:
+                subscriber.process_update(self._symbols[feed_key])
 
     def add_feed(self, symbol, period, initial_feed_data):
         """Register a feed to a symbol.
@@ -34,7 +34,7 @@ class SymbolManager:
             raise ValueError(f"Feed for {key} is already registered")
 
         self._symbols[key] = initial_feed_data
-        self._invoke_listeners(key)
+        self._invoke_subscribers(key)
 
     def remove_feed(self, symbol, period):
         """Remove a feed from the symbol manager.
@@ -60,12 +60,12 @@ class SymbolManager:
         feed = self._symbols[key]
         feed.append(update)
 
-        self._invoke_listeners(key)
+        self._invoke_subscribers(key)
 
-    def add_listener(self, symbol_listener):
+    def add_subscriber(self, symbol_subscriber):
         """Subscribe to updates from a feed."""
-        self._listeners.append(symbol_listener)
+        self._subscribers.append(symbol_subscriber)
 
-    def remove_listener(self, symbol_listener):
+    def remove_subscriber(self, symbol_subscriber):
         """Unsubscribe from updates to a feed."""
-        self._listeners.remove(symbol_listener)
+        self._subscribers.remove(symbol_subscriber)

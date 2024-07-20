@@ -3,11 +3,10 @@ from datetime import datetime
 
 from tbot.candles import Candle, CandlePeriod, CandleSeries
 from tbot.platforms.ibkr import IBWrapper
+from tbot.symbol_manager import SymbolManager, SymbolSubscriber
 from tbot.util import log
 
 from .discord_msg import send_discord_msg
-from .symbol_listener import SymbolListener
-from .symbol_manager import SymbolManager
 
 LOGGER = log.get_logger()
 LOGGER.setLevel("DEBUG")
@@ -33,7 +32,7 @@ EXCHANGE_LOOKUP = {
 }
 
 
-class Notes(SymbolListener):
+class Notes(SymbolSubscriber):
     """Class to notify when a candle crosses a note."""
 
     TONE_A = 440.0
@@ -110,7 +109,7 @@ class App:
 
                 # Register a strategy
                 notes_listener = Notes(symbol, PD)
-                self.mgr.add_listener(notes_listener)
+                self.mgr.add_subscriber(notes_listener)
                 self.mgr.add_feed(symbol, PD, CandleSeries(PD, candles, 500))
 
             # Run
