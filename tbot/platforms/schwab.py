@@ -1,9 +1,11 @@
 import asyncio
-import json
 import logging
 import os
+from datetime import datetime
 
 from schwab import auth, streaming
+
+from tbot.candles import Candle, CandlePeriod
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +53,27 @@ class SchwabWrapper:
             await self.client.login()
 
             def on_bar(message):
-                print(json.dumps(message, indent=4))
+                # HACK: There's a bug in equity subs streaming: volume and open mixed
+                if message["service"] == "CHART_EQUITY":
+                    for raw_bar in message["content"]:
+                        open_price = raw_bar["VOLUME"]
+                        volume = raw_bar["OPEN_PRICE"]
+                        raw_bar["OPEN_PRICE"] = open_price
+                        raw_bar["VOLUME"] = volume
+
+                period = CandlePeriod("1m")
+                for raw_bar in message["content"]:
+                    # Convert bar into candle
+                    candle = Candle(
+                        period,
+                        datetime.fromtimestamp(raw_bar["CHART_TIME"] / 1000),
+                        raw_bar["OPEN_PRICE"],
+                        raw_bar["HIGH_PRICE"],
+                        raw_bar["LOW_PRICE"],
+                        raw_bar["CLOSE_PRICE"],
+                        raw_bar["VOLUME"],
+                    )
+                    self.mgr.update_feed(raw_bar["key"], period, candle)
 
             self.client.add_chart_futures_handler(on_bar)
             self.client.add_chart_equity_handler(on_bar)
