@@ -9,3 +9,5 @@
 /build
 /docs/build
 /dist
+
+/token.json

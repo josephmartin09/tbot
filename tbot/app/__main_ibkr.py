@@ -1,42 +1,36 @@
 import traceback
+from datetime import datetime
 
-from tbot.candles import CandlePeriod, CandleSeries
-from tbot.platforms.schwab import SchwabWrapper
+from tbot.candles import Candle, CandlePeriod, CandleSeries
+from tbot.platforms.ibkr import IBWrapper
 from tbot.util import log
 
-# from .discord_msg import send_discord_msg
+from .discord_msg import send_discord_msg
 from .symbol_listener import SymbolListener
 from .symbol_manager import SymbolManager
-
-# from datetime import datetime
-
 
 LOGGER = log.get_logger()
 LOGGER.setLevel("DEBUG")
 
-FUTURE_LIST = [
-    "/HG",
-    "/SI",
-    "/GC",
-    "/CL",
-    "/NG",
-    "/ES",
-    "/NQ",
-    "/RTY",
-    "/YM",
-    "/ZC",
-    "/ZS",
-]
+PD = CandlePeriod("3m")
 
-EQUITY_LIST = [
-    "$SPX",
-    "$NDX",
-    "$DJI",
-    "$RUT",
-    "$VIX",
-]
-
-PD = CandlePeriod("1m")
+EXCHANGE_LOOKUP = {
+    # Metals
+    "HG": "COMEX",
+    "SI": "COMEX",
+    "GC": "COMEX",
+    # Energy
+    "CL": "NYMEX",
+    "NG": "NYMEX",
+    # Indices
+    "ES": "CME",
+    "NQ": "CME",
+    "RTY": "CME",
+    "YM": "CBOT",
+    # Commodities
+    "ZC": "CBOT",
+    "ZS": "CBOT",
+}
 
 
 class Notes(SymbolListener):
@@ -66,6 +60,9 @@ class Notes(SymbolListener):
 
     def on_update(self):
         """Run the check for a note crossing on the most recent candle."""
+        # LOGGER.debug(
+        #     f"Running on {self.symbol}-{self.period}. Last candle start {self.feed.last.time}"
+        # )
         last_high = self.feed.last.high
         last_low = self.feed.last.low
         last_time = self.feed.last.time
@@ -73,6 +70,7 @@ class Notes(SymbolListener):
             if (last_low <= n) and (last_high >= n):
                 msg = f"{self.symbol} at {n} at {last_time}"
                 LOGGER.warning(msg)
+                send_discord_msg(msg)
 
 
 class App:
@@ -88,35 +86,45 @@ class App:
 
     def run(self):
         """Run the application."""
-        schwab = SchwabWrapper(self.mgr)
+        ib = IBWrapper(self.mgr)
 
         try:
             LOGGER.info("Initializing Candles")
-            for symbol in FUTURE_LIST:
-                # Request Live data
-                schwab.add_future_stream(symbol, PD)
+            send_discord_msg("Launching TBOT Scanner")
+            for symbol, exchange in EXCHANGE_LOOKUP.items():
+                # Load a live IBKR data feed
+                candles_raw = ib.live_data(symbol, PD, exchange=exchange)
+                candles = []
+                for cr in candles_raw:
+                    candles.append(
+                        Candle(
+                            PD,
+                            datetime.fromtimestamp(cr["time"]),
+                            cr["open"],
+                            cr["high"],
+                            cr["low"],
+                            cr["close"],
+                            cr["volume"],
+                        )
+                    )
 
                 # Register a strategy
                 notes_listener = Notes(symbol, PD)
                 self.mgr.add_listener(notes_listener)
-                self.mgr.add_feed(symbol, PD, CandleSeries(PD, [], 500))
-
-            for symbol in EQUITY_LIST:
-                schwab.add_equity_stream(symbol, PD)
-                self.mgr.add_feed(symbol, PD, CandleSeries(PD, [], 500))
+                self.mgr.add_feed(symbol, PD, CandleSeries(PD, candles, 500))
 
             # Run
             LOGGER.info("Running Event loop")
-            schwab.event_loop()
+            ib.event_loop()
 
         except KeyboardInterrupt:
-            schwab.disconnect()
+            pass
 
         except Exception:
             LOGGER.error(traceback.format_exc())
 
         finally:
-            schwab.disconnect()
+            ib.disconnect()
 
 
 if __name__ == "__main__":

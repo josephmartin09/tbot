@@ -34,7 +34,8 @@ class SymbolManager:
             raise ValueError(f"Feed for {key} is already registered")
 
         self._symbols[key] = initial_feed_data
-        self._invoke_listeners(key)
+        if len(initial_feed_data) > 0:
+            self._invoke_listeners(key)
 
     def remove_feed(self, symbol, period):
         """Remove a feed from the symbol manager.
