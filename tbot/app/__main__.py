@@ -1,7 +1,7 @@
 import traceback
 
 from tbot.candles import CandlePeriod, CandleSeries
-from tbot.platforms.schwab import SchwabWrapper
+from tbot.platforms.schwab_api import SchwabWrapper
 from tbot.util import log
 
 # from .discord_msg import send_discord_msg
