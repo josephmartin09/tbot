@@ -2,11 +2,10 @@ import traceback
 
 from tbot.candles import CandlePeriod, CandleSeries
 from tbot.platforms.schwab_api import SchwabWrapper
-from tbot.util import log
 
 # from .discord_msg import send_discord_msg
-from .symbol_listener import SymbolListener
-from .symbol_manager import SymbolManager
+from tbot.symbol_manager import SymbolManager, SymbolSubscriber
+from tbot.util import log
 
 # from datetime import datetime
 
@@ -39,7 +38,7 @@ EQUITY_LIST = [
 PD = CandlePeriod("1m")
 
 
-class Notes(SymbolListener):
+class Notes(SymbolSubscriber):
     """Class to notify when a candle crosses a note."""
 
     TONE_A = 440.0
@@ -98,7 +97,7 @@ class App:
 
                 # Register a strategy
                 notes_listener = Notes(symbol, PD)
-                self.mgr.add_listener(notes_listener)
+                self.mgr.add_subscriber(notes_listener)
                 self.mgr.add_feed(symbol, PD, CandleSeries(PD, [], 500))
 
             for symbol in EQUITY_LIST:

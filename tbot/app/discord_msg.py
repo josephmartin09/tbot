@@ -25,6 +25,7 @@ def send_fmt_msg(msg):
 
 def send_discord_msg(msg):
     """Send a post request to discord."""
+    return
     payload = {
         "content": msg,
     }
