@@ -1,3 +1,19 @@
+import traceback
+from datetime import datetime
+
+import pytz
+
+from .candle_period import CandlePeriod
+
+
+class CandleParseError(Exception):
+    """Exception denotating that a candle could not be parsed from JSON format."""
+
+    def __init__(self, *args):
+        """Initialize the exception object."""
+        super().__init__(*args)
+
+
 class Candle:
     """Class to represent an OHLC candle."""
 
@@ -32,3 +48,51 @@ class Candle:
         ret_str += f"C: {self.close}, "
         ret_str += f"Vol: {self.volume}"
         return ret_str
+
+    def to_json_dict(self):
+        """Return a JSON-serializable dictionary representation of a candle.
+
+        :rtype: dictionary
+        """
+        return {
+            "period": str(self.period),
+            "time": int(self.time.timestamp() * 1000),
+            "open": self.open,
+            "high": self.high,
+            "low": self.low,
+            "close": self.close,
+            "volume": self.volume,
+        }
+
+    @classmethod
+    def from_json_dict(cls, json_dict):
+        """Create a candle from a JSON dictionary representation of the candle.
+
+        :param dictioinary json_dict: A JSON dictionary representation of the candle.
+
+        .. note::
+            It is expected that the json_dict param is a python dict, not a JSON string
+        """
+        err = None
+        c = None
+        try:
+            c = Candle(
+                CandlePeriod(json_dict["period"]),
+                datetime.fromtimestamp(
+                    float(json_dict["time"]) / 1000, tzinfo=pytz.utc
+                ),
+                json_dict["open"],
+                json_dict["high"],
+                json_dict["low"],
+                json_dict["close"],
+                json_dict["volume"],
+            )
+
+        except Exception:
+            err = traceback.format_exc()
+
+        finally:
+            if err:
+                raise CandleParseError(err)
+
+            return c

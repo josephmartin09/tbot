@@ -3,11 +3,11 @@ from abc import ABC, abstractmethod
 from tbot.indicators import Indicator
 
 
-class SymbolListener(ABC):
+class SymbolSubscriber(ABC):
     """Class to receive updates for a symbol feed from the symbol manager."""
 
     def __init__(self, symbol, period):
-        """Initialize the SymbolListener.
+        """Initialize the Symbolsubscriber.
 
         :param str symbol: The symbol of interest
         :param CandlePeriod period: The time period the feed will be delimited by
@@ -22,7 +22,7 @@ class SymbolListener(ABC):
     def process_update(self, new_feed):
         """Ingest an update from the symbol manager.
 
-        :param CandleSeries new_feed: The most recent data for this listener's feed
+        :param CandleSeries new_feed: The most recent data for this subscriber's feed
 
         ..note::
             This is meant to be called only by the symbol manager object.
@@ -46,18 +46,18 @@ class SymbolListener(ABC):
 
     @property
     def period(self):
-        """Get the period of this listener.
+        """Get the period of this subscriber.
 
-        :return: The period of the feed registered to this listener
+        :return: The period of the feed registered to this subscriber
         :rtype: CandlePeriod
         """
         return self._period
 
     @property
     def feed(self):
-        """Get the feed requested by this listener.
+        """Get the feed requested by this subscriber.
 
-        :return: The feed requested by this listener
+        :return: The feed requested by this subscriber
         :rtype: CandleSeries
         """
         return self._feed
